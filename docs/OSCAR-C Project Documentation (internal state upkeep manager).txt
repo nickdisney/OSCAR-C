@@ -1,0 +1,81 @@
+OSCAR-C Project Documentation: InternalStateUpkeepManager (agent_helpers/internal_state_manager.py)
+1. Purpose and Role in OSCAR-C
+The InternalStateUpkeepManager is a dedicated helper class within the OSCAR-C agent's agent_helpers package. Its primary responsibility is to manage the core dynamics of the agent's internal affective and existential states: Pain, Happiness, and Purpose (the PHP system). This manager encapsulates the logic for:
+Tracking agent aging (agent_age_cycles).
+Calculating baseline_pain_level based on agent age.
+Managing active_pain_sources, including their decay over time and removal when their intensity drops below a threshold.
+Calculating the current_total_pain_level.
+Applying decay to happiness_level and purpose_level towards their respective baselines or natural rates.
+Updating happiness_level and purpose_level based on goal achievements and learning events (from DynamicSelfModel).
+Handling pain resolution when a goal related to a PainSource is achieved.
+Applying the negative impact of current pain on happiness.
+Generating new PainSource objects in response to various types of goal failures (e.g., "MissedOpportunityGoal", "PersistentPlanningFailure", "PersistentExecutionFailure").
+Orchestrating the check for existential shutdown thresholds related to maximum Pain or minimum Purpose.
+By centralizing this logic, the InternalStateUpkeepManager simplifies the AgentController's main loop and provides a focused module for the complex interplay of these internal states.
+2. Theoretical Basis and Cognitive Inspiration
+The functionalities managed by this class are directly tied to the theoretical underpinnings of the Affective & Motivational Core, drawing from:
+Affective Computing & "Hot" Cognition: Models internal evaluative states.
+Psychological Pain & Aversion: Implements mechanisms for pain accumulation from unmet expectations/failures, value-weighted impact, temporal decay/coping, baseline existential friction, and attentional bias towards pain.
+Happiness & Reward: Links happiness to goal achievement (reinforcement) and hedonic adaptation.
+Purpose, Efficacy & Self-Preservation: Connects purpose to self-efficacy (capability gain), meaning (complex goal achievement), and manages vulnerability to learned helplessness and existential crisis.
+(Refer to the "OSCAR-C Project Documentation (Affective & Motivational Core)" for a detailed theoretical breakdown.)
+3. Functional Overview and Implementation
+The InternalStateUpkeepManager is instantiated by the AgentController and is tightly coupled with it, accessing and modifying the agent's core P/H/P state variables and configuration.
+3.1. Initialization
+Takes a reference to the AgentController instance.
+Initializes an internal tracker for the last known capabilities count from DynamicSelfModel (_last_dsm_capabilities_count) to detect changes for purpose updates.
+3.2. Key Methods
+perform_upkeep_cycle_start():
+Called early in each AgentController._run_agent_loop cycle.
+Agent Aging & Baseline Pain: Increments agent_controller.agent_age_cycles. Calculates agent_controller.baseline_pain_level based on agent_age_cycles and configured factors (e.g., logarithmic increase, capped at max_baseline_pain_from_age).
+Active Pain Source Decay: Iterates through agent_controller.active_pain_sources. For each unresolved PainSource:
+Applies decay to its current_intensity based on its decay_rate_per_cycle.
+If current_intensity drops below pain_event_min_intensity_to_retain, the PainSource is removed from the active list.
+Sums the current_intensity of all remaining unresolved PainSource objects to get current_acute_pain_sum.
+Total Pain Calculation: Updates agent_controller.pain_level = min(max_pain_threshold, agent_controller.baseline_pain_level + current_acute_pain_sum).
+Happiness & Purpose Decay: Applies decay to agent_controller.happiness_level (towards happiness_baseline_target) and agent_controller.purpose_level (by purpose_decay_rate_per_cycle).
+Clamps all P/H/P levels to their configured min/max values.
+perform_upkeep_post_action_learning(goal_just_achieved_this_cycle, priority_of_achieved_goal, achieved_goal_object=None):
+Called in Step 10 of the cognitive cycle, after goal status updates and DynamicSelfModel processing.
+Happiness from Goal Achievement: If goal_just_achieved_this_cycle is true, increases agent_controller.happiness_level based on priority_of_achieved_goal and configured scaling factors.
+Pain Resolution: If achieved_goal_object exists and its ID matches the source_goal_id of an active, unresolved PainSource:
+Marks the PainSource as is_resolved = True.
+Significantly reduces its current_intensity (e.g., by 90%).
+Awards an additional happiness bonus proportional to the pain intensity reduced.
+Purpose from Complex Goal Achievement: If goal_just_achieved_this_cycle is true and priority_of_achieved_goal meets complex_goal_priority_threshold, increases agent_controller.purpose_level.
+Purpose from DSM Capability Gain:
+Retrieves the current num_capabilities from DynamicSelfModel.get_status().
+If current_dsm_caps_count has increased since _last_dsm_capabilities_count, increases agent_controller.purpose_level based on the number of new capabilities and purpose_from_capability_gain_factor.
+Updates _last_dsm_capabilities_count.
+Pain Impact on Happiness: Reduces agent_controller.happiness_level based on agent_controller.pain_level and pain_impact_on_happiness_scale_factor.
+Clamps final Happiness and Purpose levels.
+generate_pain_from_goal_failure(failed_goal_object, failure_type="GenericGoalFailure"):
+Called by GoalLifecycleManager or AgentController when a goal is definitively marked as FAILED.
+failure_type can be "MissedOpportunityGoal", "PersistentPlanningFailure", "PersistentExecutionFailure", etc.
+Checks if an unresolved PainSource for this failed_goal_object.id already exists; if so, it doesn't create a duplicate.
+Calculates initial_pain_intensity based on failed_goal_object.priority and a scale factor specific to the failure_type (read from config.toml [internal_states]), capped by pain_event_max_initial_intensity.
+If initial_pain_intensity is above pain_event_min_intensity_to_retain:
+Creates a new PainSource object with the calculated intensity, description, type, and source_goal_id.
+Adds this new PainSource to agent_controller.active_pain_sources.
+Immediately recalculates and updates agent_controller.pain_level.
+check_existential_thresholds() -> bool:
+Called at the end of each cognitive cycle by the AgentController.
+Checks if agent_controller.pain_level >= max_pain_shutdown_threshold.
+Checks if agent_controller.purpose_level <= min_purpose_shutdown_threshold (AND agent_controller.agent_age_cycles is above a minimum grace period like min_cycles_before_purpose_shutdown).
+If either condition is met:
+Logs a critical shutdown reason.
+Attempts to trigger a final narrative entry in NarrativeConstructor reflecting the shutdown cause.
+Calls agent_controller.stop() to initiate graceful agent shutdown.
+Returns True (indicating shutdown was triggered).
+Returns False if no thresholds are crossed.
+3.4. Key Algorithmic Concepts
+Accumulation and Decay Models: For managing P/H/P levels and PainSource intensity.
+Event-Driven Updates: P/H/P states are modified by specific events like goal success/failure and learning.
+Thresholding: For pain source retention and existential shutdown conditions.
+Scaled Responses: The magnitude of P/H/P changes is often scaled by factors like goal priority or configurable constants.
+4. Relationship to Overall Project & Logic Flow
+The InternalStateUpkeepManager is not a standalone cognitive component in the 12-step cycle but rather a crucial helper module instantiated and utilized by the AgentController.
+AgentController: Owns the P/H/P state variables. Calls perform_upkeep_cycle_start() at the beginning of its loop, perform_upkeep_post_action_learning() after model updates (Step 10), and check_existential_thresholds() at the end of the loop. It also delegates PainSource generation (via generate_pain_from_goal_failure()) to this manager, typically when its GoalLifecycleManager reports a definitive goal failure.
+Data Source for Other Components: The P/H/P levels managed herein (agent_controller.pain_level, etc.) are part of the cognitive_state provided to components like ExperienceStream, EmergentMotivationSystem, AttentionController, and NarrativeConstructor, thus influencing their behavior.
+PainSource Objects: Created by this manager and then made available (via AgentController.active_pain_sources) to be processed as attention candidates by AttentionController.
+This manager ensures that the complex logic governing OSCAR-C's internal affective and existential states is handled cohesively and consistently, underpinning the agent's motivational architecture and its capacity for more nuanced, affectively-driven behavior.

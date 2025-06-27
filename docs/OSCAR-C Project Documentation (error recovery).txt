@@ -1,0 +1,92 @@
+OSCAR-C Project Documentation: cognitive_modules/error_recovery.py
+File Path: cognitive_modules/error_recovery.py
+Purpose and Role:
+The ErrorRecoverySystem (ERS) is a critical component in OSCAR-C responsible for managing and responding to runtime exceptions that occur within the agent's cognitive cycle or during action execution. When an error is caught by the AgentController, it's passed to the ERS. The ERS logs the error, analyzes its type and frequency, and then suggests an appropriate RecoveryMode (e.g., SOFT_RESET, MEDIUM_RESET, HARD_RESET, SAFE_MODE) to the AgentController. This allows the agent to attempt to recover from failures gracefully, maintain operational stability, and prevent catastrophic crashes.
+Theoretical Basis / Cognitive Inspiration:
+Fault Tolerance and Resilience: Complex autonomous systems operating in uncertain environments inevitably encounter errors. The ERS provides a mechanism for fault tolerance, enabling the agent to handle unexpected situations and attempt to continue operating. This is analogous to biological systems' resilience and repair mechanisms.
+Error Processing in Cognition: Human cognition involves processes for detecting and correcting errors. While the ERS is more system-level, it parallels the idea that errors are significant events that require a response, potentially a change in strategy or state (Reason, 1990, "Human Error").
+Graded Response to Errors: The concept of different RecoveryModes reflects a graded response to errors, similar to how an organism might have different levels of stress response or recovery actions depending on the severity or persistence of a problem.
+Implementation Details:
+Inheritance:
+class ErrorRecoverySystem(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+Configuration: Loaded during initialize from the error_recovery section of config.toml.
+max_history: int: Maximum number of error records to keep in self.error_history.
+freq_window: int: The number of recent errors to consider when checking the frequency of a specific error type.
+freq_threshold: int: If an error type occurs this many times within the freq_window, a more severe recovery mode may be suggested.
+State Variables:
+error_history: Deque[Dict[str, Any]]: A deque storing records of recent errors. Each record includes timestamp, error_type (class name), error_msg, context (provided by AgentController), and the suggested_recovery (name of the RecoveryMode).
+recovery_strategies: Dict[type, Callable]: A dictionary mapping Python exception types (e.g., MemoryError, TimeoutError) to "suggester" functions. These functions take the error and context as input and return a RecoveryMode enum member (or None).
+_RecoveryModeEnum: Reference to the RecoveryMode enum (obtained via globals().get('RecoveryMode')).
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters (max_history, freq_window, freq_threshold).
+Initializes self.error_history deque with the configured max_history.
+Populates self.recovery_strategies by mapping standard Python exception types to lambdas or methods that return specific RecoveryMode enum members. For example:
+MemoryError -> RecoveryMode.MEDIUM_RESET
+TimeoutError -> RecoveryMode.SOFT_RESET
+asyncio.CancelledError -> None (typically handled by the canceling code itself)
+ConnectionError -> RecoveryMode.SOFT_RESET
+TypeError, ValueError, AttributeError, KeyError, ImportError also map to specific recovery modes.
+Exception (generic fallback) maps to self._suggest_generic_recovery.
+Logs an error if the RecoveryMode enum is not available (e.g., due to import issues).
+async def handle_error(self, error: Exception, context: Optional[Dict[str, Any]] = None) -> Optional['RecoveryMode'];
+This is the primary method called by the AgentController when an exception is caught.
+Error Logging: Logs detailed information about the error (timestamp, type, message, context) to the system logger. It also attempts to log a concise version to the UI via self._controller._log_to_ui if the controller reference and method are available.
+History Update: Appends a new error_record (initially with suggested_recovery=None) to self.error_history.
+Strategy Selection: Calls _get_recovery_suggester(error) to find the most specific suggester function based on the type of error.
+Recovery Suggestion: Invokes the selected suggester function. The suggester function can be synchronous or asynchronous.
+Validates that the suggested mode is a RecoveryMode enum member (if RecoveryMode enum is available).
+Updates the error_record in self.error_history with the string name of the suggested_recovery.
+Returns the actual RecoveryMode enum member (or None if no specific recovery action is suggested or if the RecoveryMode enum is unavailable).
+def _get_recovery_suggester(self, error: Exception) -> Callable;
+Iterates through self.recovery_strategies (which maps error types to handler functions) and returns the suggester function associated with the first matching error type (using isinstance(error, error_type) for inheritance-aware matching).
+If no specific strategy is found for the given error type, it returns the generic fallback suggester (self._suggest_generic_recovery, or a dummy lambda if RecoveryMode enum is missing).
+def _suggest_generic_recovery(self, error: Exception, context: Dict[str, Any]) -> Optional[Any];
+The fallback suggester for unhandled Exception types.
+Calls _check_error_frequency(error_type_name) to determine how often this specific error type has occurred in the recent error history.
+Escalation Logic:
+If error_frequency >= self.freq_threshold * 2 (indicating a very frequent, persistent error): Suggests RecoveryMode.HARD_RESET.
+Else if error_frequency >= self.freq_threshold (frequent error): Suggests RecoveryMode.MEDIUM_RESET.
+Else (infrequent generic error): Suggests RecoveryMode.SOFT_RESET.
+Returns the appropriate RecoveryMode enum member or None if the RecoveryMode enum is unavailable.
+def _check_error_frequency(self, error_type_name: str) -> int;
+Counts occurrences of error_type_name within the last self.freq_window entries of self.error_history. Uses collections.Counter for efficient counting.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Returns None. The ERS is invoked reactively through its handle_error method by the AgentController when exceptions occur, rather than participating as a standard data-processing step in the cognitive cycle.
+async def reset(self) -> None;
+Clears the self.error_history deque.
+async def get_status(self) -> Dict[str, Any];
+Returns current operational status, including the total number of errors recorded in the history, the history capacity, details of the last error (type and timestamp), and frequency counts of the top 5 most recent error types.
+Algorithms Used:
+Type-Based Dispatch / Strategy Pattern: _get_recovery_suggester uses isinstance to select an appropriate error handling strategy based on the exception's class, effectively implementing a strategy pattern.
+Frequency Analysis with Sliding Window: _check_error_frequency uses collections.Counter on a sliding window of recent errors (defined by self.error_history which has maxlen) to detect if certain error types are recurring too often.
+Threshold-Based Escalation: The _suggest_generic_recovery method uses configured frequency thresholds to escalate the severity of the suggested recovery mode (from SOFT_RESET to MEDIUM_RESET to HARD_RESET) if an error type persists.
+Relationship to Overall Project & Logic Flow:
+The ErrorRecoverySystem is not a direct, sequential step in the 12-step cognitive cycle. Instead, it is a crucial reactive component invoked by the AgentController from its main exception handling blocks within _run_initialization_and_loop (for errors during component initialization) and _run_agent_loop (for errors during a cognitive cycle).
+Inputs (to handle_error from AgentController):
+error: Exception: The actual Python exception object that was caught by the AgentController.
+context: Optional[Dict[str, Any]]: A dictionary provided by the AgentController containing contextual information about the state of the agent when the error occurred (e.g., current cycle number, the component being processed, active goal description, last action attempted).
+Output (from handle_error to AgentController):
+Optional[RecoveryMode]: The suggested RecoveryMode enum member for the AgentController to act upon. If None is returned, the AgentController might default to a minimal recovery action or simply log the error without taking drastic steps.
+Influence on AgentController:
+The ERS directly guides the AgentController's error recovery logic. The AgentController, upon receiving a RecoveryMode suggestion, calls its internal _oscar_handle_recovery(suggested_mode) method, which then implements the specific actions associated with that mode (e.g., clearing caches for SOFT_RESET, resetting component states for MEDIUM_RESET, etc.).
+Potential Future Interactions:
+Error information logged by ERS (and stored in its history) could potentially be queried and analyzed by the MetaCognitiveMonitor for detecting deeper patterns of system instability or by the DynamicSelfModel to learn about situations or actions that frequently lead to errors.
+Current State of the Script:
+Functionality Implemented:
+Core error handling, logging the error details (including context), and maintaining a history of errors.
+A strategy map (self.recovery_strategies) for dispatching to different recovery suggesters based on common Python exception types.
+A frequency-based escalation logic within _suggest_generic_recovery for unmapped or persistent generic errors.
+Configuration of history size and frequency analysis parameters.
+Alignment with Plans: Provides the foundational error recovery mechanism essential for a robust autonomous agent.
+Known Limitations/Placeholders:
+Simplicity of Recovery Strategies: The current recovery strategies are relatively simple, primarily mapping specific error types to predefined RecoveryModes or using frequency counts for generic errors. They do not perform deep analysis of the error context to provide highly tailored recovery advice.
+No Learning from Recovery Effectiveness: The ERS does not currently learn which RecoveryModes are most effective for specific types of errors or contexts over time. The selection is static based on the predefined recovery_strategies map and frequency.
+Primarily Reactive: The system is reactive to errors after they occur. While frequency analysis provides some measure of detecting persistent problems, there is limited capability for proactive error prevention based on ERS data alone (this would typically involve MetaCognitiveMonitor or PredictiveWorldModel).
+Suggestions for Future Development/Refinement:
+More Context-Aware Recovery Suggesters: Enhance the individual suggester functions (or create new ones for application-specific custom exceptions) to perform a more detailed analysis of the context dictionary passed to handle_error. For example, a TimeoutError during a CALL_LLM action might suggest a different recovery (e.g., retry with a longer timeout for that specific LLM, or try a different LLM model) than a TimeoutError during a file operation.
+Learn Effectiveness of Recovery Modes: Implement a mechanism to track the success or failure of different RecoveryModes applied in response to specific errors or contexts. If SOFT_RESET repeatedly fails to resolve a particular issue, the system might learn to escalate to MEDIUM_RESET more quickly for that error type in the future. This could involve reinforcement learning principles.
+User-Defined Error Handling Strategies: Allow developers or users to define custom error handling strategies in config.toml for application-specific exceptions that OSCAR-C might encounter when interacting with custom tools or environments.
+Integration with ValueSystem: If an error results in a state that potentially violates the agent's core values (e.g., data corruption, unauthorized access attempt), the ValueSystem could influence the suggested RecoveryMode towards a safer, more conservative, or more restorative option.
+Advanced Root Cause Analysis (Long-term): For highly advanced meta-cognition, the ERS (or MetaCognitiveMonitor using ERS data) could attempt a rudimentary root cause analysis by correlating frequent errors with preceding actions, specific PhenomenalState characteristics, environmental conditions, or configuration changes.

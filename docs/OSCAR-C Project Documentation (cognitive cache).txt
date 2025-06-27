@@ -1,0 +1,76 @@
+OSCAR-C Project Documentation: cognitive_modules/cognitive_cache.py
+File Path: cognitive_modules/cognitive_cache.py
+Purpose and Role:
+The CognitiveCache component provides a general-purpose, in-memory Time-To-Live (TTL) caching mechanism for the OSCAR-C agent. Its primary role is to store the results of computationally expensive or frequently accessed operations, reducing redundant work and improving overall system performance. Examples of data that might be cached include results from LLM calls, complex query results from the KnowledgeBase, or outcomes of planning sub-problems.
+Theoretical Basis / Cognitive Inspiration:
+Working Memory & Short-Term Buffers: While not a direct model of a specific neurobiological memory system like working memory, the CognitiveCache serves a functionally analogous purpose to short-term memory buffers in human cognition. These buffers hold recently processed information or intermediate results for quick reuse, preventing the need to re-derive them from scratch (Baddeley, 2003, "Working memory: looking back and looking forward.").
+Computational Efficiency: In any complex AI system, optimizing performance is crucial. Caching is a standard computer science technique to trade memory for speed by storing pre-computed results.
+Memoization: The get_or_compute pattern is a form of memoization, where the results of function calls with specific inputs (the cache key) are stored to avoid re-computation if the same inputs occur again within the TTL.
+Implementation Details:
+Inheritance:
+class CognitiveCache(CognitiveComponent):
+Correctly implements the CognitiveComponent protocol.
+Internal Storage:
+_cache: Dict[Hashable, Any]: A Python dictionary storing the cached values, where keys must be hashable.
+_timestamps: Dict[Hashable, float]: A Python dictionary storing the time.time() timestamp when each item was added or last updated in the cache.
+_ttl: float: The default Time-To-Live for cache entries in seconds, loaded from configuration.
+_hits: int, _misses: int: Counters for cache performance statistics.
+Concurrency Control:
+_lock = asyncio.Lock(): An asyncio.Lock is used to protect all direct read and write access to the _cache and _timestamps dictionaries, ensuring thread-safety in an asynchronous environment.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Stores the controller reference and the cognitive_cache section of the global configuration.
+Sets self._ttl from the default_ttl value in its configuration section (defaulting to 1.0 second if not specified or invalid). Ensures TTL is positive.
+async def get_or_compute(self, key: Hashable, compute_func: Callable[[], Any], ttl_override: Optional[float] = None) -> Any;
+This is the primary interface for using the cache.
+Determines the effective_ttl (using ttl_override if provided and valid, otherwise the instance's default self._ttl).
+Cache Check (under lock): Acquires self._lock. Checks if the key exists in self._cache and if current_time - _timestamps[key] < effective_ttl.
+If fresh, increments _hits, logs a hit, releases the lock, and returns the cached value.
+If not fresh or not present, increments _misses and logs a miss. The lock is released before computation.
+Computation (outside lock):
+Calls the provided compute_func.
+If compute_func is an async function (checked with asyncio.iscoroutinefunction), it is awaited.
+If compute_func is a synchronous function, it is run in an executor thread pool using loop.run_in_executor(None, compute_func) to prevent blocking the main asyncio event loop. Includes a fallback to direct synchronous call if the event loop is not running (e.g., during some test scenarios or shutdown).
+Handles exceptions during computation, logs them, and re-raises.
+Cache Update (under lock): Acquires self._lock again. Stores the computed result in self._cache[key] and updates self._timestamps[key] to the current time.
+Returns the computed result.
+async def get(self, key: Hashable) -> Optional[Any];
+Retrieves a value from the cache if it's present and not expired (within self._ttl). Returns None otherwise. Acquires self._lock for access.
+async def put(self, key: Hashable, value: Any, ttl_override: Optional[float] = None);
+Explicitly adds or updates a value in the cache. Uses ttl_override if provided, otherwise self._ttl. Ensures the effective TTL is positive. Acquires self._lock for modification.
+async def clear(self);
+Clears all items from self._cache and self._timestamps. Resets _hits and _misses statistics. Acquires self._lock.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Returns None. The cache is a passive component used by other modules; it does not actively process data in the main cognitive cycle flow.
+async def reset(self) -> None;
+Calls self.clear() to empty the cache.
+async def get_status(self) -> Dict[str, Any];
+Returns a dictionary with cache statistics: default TTL, hits, misses, total calls, hit rate (percentage), current item count, and an estimated size of the cache in bytes and megabytes (using sys.getsizeof for keys and values, which provides a shallow size estimation).
+async def shutdown(self) -> None;
+Calls self.clear() to empty the cache.
+Algorithms Used:
+Time-To-Live (TTL) Eviction: Items are not actively removed by a background cleanup task. Instead, they are considered expired if, upon access (get or get_or_compute), their stored timestamp plus their effective TTL is less than the current time. Expired items are then typically overwritten by a new computation if get_or_compute is called.
+Asynchronous Execution of Synchronous Code: Uses loop.run_in_executor to prevent potentially long-running synchronous compute_funcs from blocking the agent's main asyncio event loop.
+Relationship to Overall Project & Logic Flow:
+The CognitiveCache is a utility component that can be accessed by any other component or the AgentController to improve performance.
+AgentController: Instantiates and initializes the CognitiveCache. It can make the cache instance available to other components (e.g., by passing a reference during their initialization or via self._controller.cache).
+Other Cognitive Components:
+HTNPlanner: Could use the cache to store previously generated plans for specific goal/state combinations to avoid redundant planning (as suggested in oscar-c plan 3 (unfinished).txt).
+KnowledgeBase: Could cache results of frequent or complex queries.
+Components making external_comms.call_ollama calls: Could cache LLM responses for identical prompts (if appropriate for the use case) to save time and resources.
+Any component performing deterministic, expensive computations whose results might be reused soon.
+Current State of the Script:
+Functionality Implemented:
+The TTL cache logic, including get_or_compute, get, put, and clear, is fully functional.
+Correct handling of both synchronous and asynchronous compute_funcs.
+Thread-safe access using asyncio.Lock.
+Statistics tracking (hits, misses, size estimation).
+Alignment with Plans: Provides the caching infrastructure mentioned as beneficial for performance optimization.
+Known Limitations/Placeholders:
+No Capacity Limit: The cache currently does not have an explicit limit on the number of items or total memory size it can hold, other than available system memory. This could lead to unbounded memory growth if many unique, non-expiring (or long TTL) items are cached.
+Basic Eviction: Relies solely on TTL for implicit eviction on access. No LRU (Least Recently Used) or LFU (Least Frequently Used) policies are implemented for when a capacity limit might be reached.
+Size Estimation: The use of sys.getsizeof provides a shallow estimate of object sizes; for deeply nested or complex objects, this can be an underrepresentation.
+Suggestions for Future Development/Refinement:
+Capacity Limits & Eviction Policies: Implement optional configuration for maximum item count or total memory size. If a limit is reached, an eviction policy (e.g., LRU, LFU) should be applied to remove items, in addition to TTL-based expiry. collections.OrderedDict or a custom linked list structure could assist in implementing LRU.
+Cache Invalidation API: For data types that can change due to external events (e.g., a file's content changes after being cached by a READ_FILE action), an explicit API to invalidate specific cache keys or groups of keys (e.g., by prefix or tag) would be beneficial.
+Persistence (Optional): For some use cases, particularly for caching results that are expensive but stable across agent restarts (e.g., certain types of LLM inferences or complex knowledge derivations), an option to persist the cache to disk (e.g., using pickle, shelve, or a lightweight key-value store like diskcache) could be considered. This would add I/O overhead and complexity.

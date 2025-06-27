@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.gguf
+*safetensors
+
+# Environments
+.env
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data & Databases (CRITICAL: Do not commit your live databases/data)
+# Add specific data files you want to ignore.
+# For example, if you don't want to commit the learned models or logs:
+data/oscar_c_kb.db
+data/narrative_log.jsonl
+data/self_model.json
+data/pwm_learning_buffer.csv
+data/pwm_learning_buffer.meta.json
+data/perf_adjustments.json
+data/htn_library.json
+run/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Dependencies
+dist/
+build/
+*.egg-info/

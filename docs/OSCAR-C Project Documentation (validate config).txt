@@ -1,0 +1,47 @@
+OSCAR-C Project Documentation: Configuration Validation Script (scripts/validate_config.py)
+1. Purpose and Role in OSCAR-C
+The scripts/validate_config.py script is an essential utility for the OSCAR-C project, designed to ensure the integrity and correctness of the agent's main configuration file, config.toml. Its primary role is to perform a comprehensive series of checks on this file before the agent attempts to load it. These checks include verifying that the config.toml file:
+Exists at the expected location and is a parsable, valid TOML document.
+Contains all required sections and keys that are expected by the AgentController and its various cognitive components.
+Has values for these keys that conform to their specified data types (e.g., integer, float, boolean, string, list).
+For critical parameters, has values that fall within predefined acceptable ranges or meet specific logical criteria (e.g., thresholds being in a specific order, numerical values being positive).
+(Optionally) Meets basic hardware availability requirements if specified.
+This script plays a crucial role in preventing runtime errors caused by misconfiguration, thereby enhancing the agent's stability and reliability. It also serves as an implicit form of documentation for the expected configuration structure and valid parameter ranges.
+2. Theoretical Basis and Cognitive Inspiration
+This utility is a standard software engineering best practice for maintaining the robustness of configurable systems. Ensuring a valid configuration before system startup is analogous to an organism possessing a viable "genetic code" or operating within essential "environmental parameters" necessary for proper functioning.
+3. Functional Overview and Implementation
+The script defines a schema for the config.toml file through internal data structures and then validates the loaded configuration against this schema.
+3.1. Configuration Schema Definition
+REQUIRED_CONFIG_KEYS: A nested dictionary that defines the expected structure of config.toml.
+Top-level keys represent section names (e.g., [filesystem], [agent], [attention_controller]).
+Inner dictionaries map key names within each section to their expected Python data type(s) (e.g., int, float, bool, str, or a tuple like (int, float) if multiple types are acceptable). This structure dictates which keys must be present and their expected types.
+VALUE_CHECKS: A dictionary mapping dot-separated key paths (e.g., "filesystem.max_list_items", "performance.target_cycle_time") to validation functions (typically lambda functions). Each function takes the key's value as input and returns True if the value is valid according to specific criteria (e.g., positive, within a 0-1 range, a valid path string), and False otherwise.
+HARDWARE_REQUIREMENTS (Optional): A dictionary specifying minimum system resources like CPU cores, RAM, and disk space. Checks for these requirements utilize the psutil library.
+3.2. Core Validation Logic (validate_config function)
+File Existence and Parsing:
+Checks if the specified config_filepath (typically config.toml in the project root) exists and is a regular file.
+Attempts to parse the file using toml.load(). Errors during parsing (e.g., invalid TOML syntax) are caught and reported.
+Key Presence and Type Validation:
+Iterates through the defined REQUIRED_CONFIG_KEYS.
+For each section, it verifies its presence in the loaded configuration.
+For each key within a section, it verifies its presence.
+Handles "optional" keys (as designated within the script's schema definition) by issuing a warning if missing, rather than an error.
+Checks if the data type of each key's value in the loaded configuration matches the expected type(s) defined in REQUIRED_CONFIG_KEYS. It allows an integer value if a float is expected but issues a warning.
+Specific Value Validation:
+Iterates through the VALUE_CHECKS dictionary.
+For each configured key path, it retrieves the corresponding value from the loaded configuration.
+Calls the associated validation function with this value. If the function returns False or raises an exception (indicating an invalid value), an error is logged.
+Specialized Checks:
+Consciousness Threshold Order: Specifically verifies that the consciousness thresholds defined in config["consciousness_assessor"] (e.g., unconscious_threshold, pre_conscious_threshold, conscious_threshold, meta_conscious_threshold) are present, are numerical, and follow a logical ascending order within the valid range of [0, 1].
+Hardware Requirement Checks (Optional): If enabled and psutil is available, checks if the system meets the minimum CPU, RAM, and disk space specified in HARDWARE_REQUIREMENTS.
+Reporting: Collects all errors and warnings encountered during the validation process. These are printed to the console, providing clear feedback to the user.
+Return Value: Returns True if no errors were found (warnings are acceptable for a "valid" result), and False otherwise, indicating a configuration issue that needs to be addressed.
+3.3. Command-Line Execution
+The script is designed to be run directly from the command line (e.g., python scripts/validate_config.py [--config /path/to/custom_config.toml]). It takes an optional argument for the configuration file path, defaulting to config.toml in the project root. The script exits with status code 0 for successful validation and 1 if errors are found.
+4. Relationship to Overall Project & Logic Flow
+validate_config.py is a crucial pre-flight check and development utility for OSCAR-C:
+Pre-Run Check: It is intended to be run by developers after any modifications to config.toml or when setting up OSCAR-C in a new environment. It can also be integrated into automated testing or CI/CD pipelines.
+Preventing Runtime Errors: By identifying configuration issues before the agent starts, it helps prevent runtime KeyErrors, TypeErrors, or unexpected behavior in the AgentController and cognitive components that would arise from missing, malformed, or out-of-range parameters.
+Implicit Documentation: The REQUIRED_CONFIG_KEYS and VALUE_CHECKS dictionaries within the script serve as an implicit, executable form of documentation for the expected configuration structure and valid parameter ranges.
+Agent Robustness: Contributes significantly to the overall robustness and reliability of the OSCAR-C system by ensuring that it starts with a configuration known to be syntactically and semantically sound according to its design specifications.
+This validation script is a key tool for maintaining the stability and manageability of the OSCAR-C project, especially as its configuration complexity grows with the addition of new features and components.

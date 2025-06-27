@@ -1,0 +1,74 @@
+OSCAR-C Project Documentation: Predictive World Model CBN Configuration (pwm_cbn_config.json)
+1. Purpose and Role in OSCAR-C
+The pwm_cbn_config.json file serves as the structural definition for the Causal Bayesian Network (CBN) used by the PredictiveWorldModel (PWM) component in OSCAR-C. While config.toml handles general operational parameters, this JSON file specifically details the nodes (variables) and the initial causal structure (edges or dependencies) of the Bayesian network that the PWM learns and uses for making predictions. This separation allows for a more detailed and structured definition of the causal model's architecture without cluttering the main config.toml file.
+2. Theoretical Basis and Cognitive Inspiration
+This configuration file directly supports the implementation of a Causal Bayesian Network within the PredictiveWorldModel. CBNs are probabilistic graphical models that represent a set of variables and their conditional dependencies via a directed acyclic graph (DAG). The theoretical inspirations include:
+Causal Reasoning: Moving beyond mere correlations (as learned by simpler frequency-based models), CBNs aim to capture underlying causal relationships between actions, contextual factors, pre-action states, and outcomes.
+Probabilistic Prediction: Instead of deterministic predictions, CBNs allow the PWM to output probability distributions over possible outcomes, providing a richer and more nuanced understanding of potential futures.
+Model-Based Learning: The PWM uses observations of the agent's interactions to learn the parameters (Conditional Probability Distributions - CPDs) of this predefined CBN structure.
+By defining the nodes and initial structure in this configuration file, OSCAR-C provides a strong inductive bias for its causal learning processes.
+3. Structure and Key Sections
+The pwm_cbn_config.json file is a JSON object with the following main keys:
+"cbn_nodes": An array of objects, where each object defines a node in the Causal Bayesian Network.
+"cbn_structure": An array of arrays, where each inner array defines a directed edge (dependency) between two nodes in the network.
+"description": A human-readable string describing the purpose or version of this CBN configuration.
+3.1. "cbn_nodes" Array
+Each object in the "cbn_nodes" array defines a variable in the Bayesian network and has the following fields:
+"name" (String): A unique identifier for the node (e.g., "ActionTypeNode", "Context_PainLevel", "OutcomeNode").
+"type" (String): Specifies the type of the variable. For the current OSCAR-C implementation, this is typically "categorical", as pgmpy often works well with discretized states for learning.
+"states" (Array of Strings): If the "type" is "categorical", this array lists all possible discrete states the variable can take (e.g., for "ActionTypeNode", states might include "READ_FILE", "CALL_LLM"; for "OutcomeNode", states like "success", "failure_permission").
+"description" (String): A human-readable description of what this node represents.
+Example Node Definitions:
+{
+  "name": "ActionTypeNode", "type": "categorical",
+  "states": ["READ_FILE", "WRITE_FILE", "CALL_LLM", ...],
+  "description": "The type of action performed."
+},
+{
+  "name": "Context_PainLevel", "type": "categorical",
+  "states": ["low_pain", "medium_pain", "high_pain", "unknown_pain"],
+  "description": "Discretized pain level."
+},
+{
+  "name": "PreState_FileExists_Target", "type": "categorical",
+  "states": ["True_File", "True_Directory", "False", "NotApplicable"],
+  "description": "Whether a target file/dir existed before action."
+},
+{
+  "name": "OutcomeNode", "type": "categorical",
+  "states": ["success", "failure_permission", "failure_not_found", ...],
+  "description": "The outcome of the action."
+}
+Use code with caution.
+Json
+The nodes are designed to capture:
+Action Characteristics: ActionTypeNode, ActionParam_PathType, ActionParam_PromptLength, ActionParam_CommandCategory.
+Agent's Internal Context: Context_PainLevel, Context_HappinessLevel, Context_PurposeLevel, Context_ConsciousState, Context_CuriosityDrive, Context_LLM_TaskType.
+Pre-Action World State: PreState_FileExists_Target, PreState_FilePermissions_Target.
+Action Outcome: OutcomeNode.
+3.2. "cbn_structure" Array
+Each element in the "cbn_structure" array is itself an array of two strings, defining a directed edge: ["ParentNodeName", "ChildNodeName"]. This signifies a direct causal influence from the parent node to the child node.
+Example Structure Definitions:
+[
+  ["ActionTypeNode", "OutcomeNode"],
+  ["PreState_FileExists_Target", "OutcomeNode"],
+  ["Context_PainLevel", "OutcomeNode"],
+  ["ActionTypeNode", "ActionParam_PathType"], // e.g., certain actions imply certain path types
+  ["Context_CuriosityDrive", "ActionTypeNode"] // e.g., high curiosity might influence action choice
+]
+Use code with caution.
+Json
+This predefined structure provides an initial hypothesis about the causal relationships in the agent's world. The PredictiveWorldModel then learns the strength of these relationships (the CPDs) from data.
+4. Loading and Usage
+The PredictiveWorldModel's initialize method reads this pwm_cbn_config.json file (path typically specified in config.toml under [agent_data_paths] or relative to the PWM's module).
+It uses the "cbn_nodes" information to define the nodes and their possible states within its internal pgmpy.models.BayesianNetwork object.
+It uses the "cbn_structure" information to define the edges (dependencies) in the network.
+The utils.bayesian_utils.extract_features_for_cbn function is responsible for taking raw agent data (action details, context, pre-action state predicates) and converting/discretizing it into values that match the defined node states in this configuration.
+This configured network structure is then used by the PWM for learning CPDs from buffered observations and for performing probabilistic inference to predict outcomes.
+5. Role in the OSCAR-C Ecosystem
+The pwm_cbn_config.json file is critical for the advanced causal learning capabilities of the PredictiveWorldModel:
+Defines Causal Hypothesis: It explicitly states the agent's initial assumptions about what factors influence action outcomes.
+Guides Learning: Provides the structure for which the PWM learns quantitative probabilistic relationships (CPDs).
+Enables Explainability (Rudimentary): The defined structure can help in understanding why the PWM makes certain predictions, as the influential parent nodes are explicitly listed.
+Facilitates Experimentation: Researchers can modify this file to test different causal hypotheses about the agent's environment and internal dynamics without changing the core PWM code.
+By externalizing the CBN's structural definition, OSCAR-C allows for flexibility and iterative refinement of its causal world model, a key aspect of its advanced learning and prediction mechanisms.

@@ -1,0 +1,105 @@
+OSCAR-C Project Documentation: scripts/release.py
+File Path: scripts/release.py
+Purpose and Role:
+The release.py script is a utility designed to automate and standardize the process of creating new releases for the OSCAR-C project. It performs a sequence of tasks including: ensuring the Git repository is in a clean state and on the main branch, updating version numbers in specified project files, generating and prepending a changelog entry based on recent Git commits, committing these changes, creating an annotated Git tag, and optionally pushing the new commit and tag to a remote Git repository. This script helps maintain a consistent release workflow, reduces manual errors, and ensures that releases are properly versioned and documented.
+Theoretical Basis / Cognitive Inspiration:
+Not applicable. This is a software development lifecycle and version management tool, standard practice for managing software projects.
+Implementation Details:
+Core Technology: Relies heavily on Git commands executed via Python's subprocess module.
+Configuration Constants:
+VERSION_FILES: Dict[str, str]: A dictionary mapping file paths (relative to PROJECT_ROOT) to their type (e.g., "toml", "json"). These are the files where the version string will be updated. Examples include "VERSION.toml" and "web/package.json".
+CHANGELOG_FILE: str: The name of the changelog file (e.g., "CHANGELOG.md"), located in PROJECT_ROOT.
+GIT_REMOTE_NAME: str: The name of the Git remote to push to (e.g., "origin").
+MAIN_BRANCH_NAME: str: The name of the primary development/release branch (e.g., "main" or "master").
+PROJECT_ROOT: Path: Automatically determined as the parent directory of the scripts/ directory.
+Key Functions:
+run_command(cmd_list: list, check=True, capture_output=False, working_dir=PROJECT_ROOT) -> Union[str, bool, None];
+A helper function to execute shell commands (primarily Git commands) using subprocess.run().
+Logs the command being run.
+Handles errors like FileNotFoundError (if Git is not found) and subprocess.CalledProcessError.
+Can capture and return stdout if capture_output is True.
+ensure_clean_repo() -> bool;
+Runs git status --porcelain to check if the repository has uncommitted changes or untracked files.
+Returns False and logs an error if the repository is not clean.
+ensure_main_branch() -> bool;
+Runs git rev-parse --abbrev-ref HEAD to get the current branch name.
+Returns False and logs an error if the current branch is not MAIN_BRANCH_NAME.
+get_latest_tag() -> Optional[str];
+Runs git fetch --tags to get the latest tags from the remote.
+Runs git describe --tags --abbrev=0 to find the most recent tag.
+Returns the tag string or None if no tags are found or an error occurs.
+update_version_files(version: str) -> bool;
+Iterates through the VERSION_FILES dictionary.
+For each file:
+Reads the file content.
+Parses it based on its file_type (toml or json).
+Updates the "version" key with the new version string.
+If a release_date key exists (e.g., in VERSION.toml), it updates it with the current ISO formatted datetime.
+Writes the modified content back to the file.
+Returns True if all files are updated successfully, False otherwise.
+generate_changelog_entry(version: str, previous_tag: Optional[str]) -> Optional[str];
+Constructs a new changelog entry in Markdown format.
+The entry includes a heading for the new version and the current date.
+It fetches Git commit messages since the previous_tag (or all commits if no previous tag) using git log ... --pretty=format:"%h %s" --no-merges.
+Attempts a simple categorization of commits into "Features", "Bug Fixes", and "Other Changes" based on keywords like "feat" or "fix" at the start of the commit message (though current implementation doesn't show this keyword prefix logic, just lists all). The provided code lists all commits under "Changed".
+Returns the generated changelog entry string or None on error.
+update_changelog_file(entry: str) -> bool;
+Reads the existing content of CHANGELOG_FILE.
+Prepends the new entry to the existing content.
+Writes the combined content back to CHANGELOG_FILE.
+create_release(version: str, push: bool = False) -> bool;
+This is the main orchestrating function.
+Performs pre-checks: ensure_main_branch() and ensure_clean_repo().
+Calls update_version_files() with the new version.
+Calls get_latest_tag() and then generate_changelog_entry().
+Calls update_changelog_file() with the new entry.
+(Optionally, a commented-out call to scripts/generate_docs.py suggests documentation generation could be part of this workflow).
+Git Operations:
+git add . (stages all changes).
+git commit -m "chore(release): Release v{version}".
+git tag -a v{version} -m "Release v{version}" (creates an annotated tag).
+Optional Push: If push is True:
+git push {GIT_REMOTE_NAME} {MAIN_BRANCH_NAME}.
+git push {GIT_REMOTE_NAME} v{version}.
+Logs success or instructions for manual pushing.
+Returns True if the local release process (commit and tag) is successful, False on any critical failure. Push failures are logged but might not cause the function to return False if local operations succeeded, depending on exact logic flow. (The current code returns False on push failure).
+Command-Line Execution (if __name__ == "__main__":):
+Uses argparse to handle command-line arguments:
+version (positional): The new version string (e.g., "2.1.0").
+--push (optional flag): If present, pushes the commit and tag to the remote.
+-v / --verbose (optional flag): Enables debug-level logging for the script.
+Calls create_release() with parsed arguments and exits with status 0 for success, 1 for failure.
+Algorithms Used:
+Not applicable in terms of complex computational algorithms. The script uses:
+File I/O for reading/writing version files and the changelog.
+JSON and TOML parsing/serialization.
+String manipulation for constructing commit messages, tags, and changelog entries.
+Orchestration of Git commands via subprocess.
+Relationship to Overall Project & Logic Flow:
+release.py is a critical development operations and version management script.
+Not Part of Agent Runtime: It does not interact with the running OSCAR-C agent.
+Development Workflow: Used by developers to create official releases of the OSCAR-C software. It helps ensure that releases are versioned consistently across multiple files, documented with a changelog, and properly tagged in the Git repository.
+Source Code Management: Directly interacts with the Git repository to commit changes, create tags, and push to a remote.
+Impacts: Modifies VERSION.toml, potentially web/package.json, and CHANGELOG.md. Creates Git commits and tags.
+Current State of the Script:
+Functionality Implemented:
+Pre-release checks (clean repo, main branch).
+Version updating in TOML and JSON files (specifically VERSION.toml and web/package.json are configured).
+Changelog entry generation from Git commits (basic listing format).
+Prepending new entry to CHANGELOG.md.
+Git commit and annotated tag creation.
+Optional pushing of commit and tag to the remote repository.
+Command-line interface with argparse.
+Alignment with Plans: Fulfills the "Release Script Creation" task (Task 7.3 from setup_planning.py).
+Known Limitations/Placeholders:
+Changelog Categorization: The generate_changelog_entry function has basic logic for categorizing commits (feat, fix, other) but the provided code primarily lists all non-merge commits. Adopting a conventional commit message format (e.g., Conventional Commits) would make this categorization more robust and automatic.
+Error Handling in run_command: While it catches CalledProcessError, the boolean return for non-capture mode might hide details if check=False is used. The current usage seems to use check=True appropriately or check=False where failure is acceptable (like get_latest_tag).
+VERSION_FILES Extensibility: Adding support for more file types or more complex update logic (e.g., in pyproject.toml under [tool.poetry]) would require extending the update_version_files function. The commented-out toml_pyproject logic is a good example.
+Documentation Generation: The call to scripts/generate_docs.py is commented out. If API documentation should be part of the release commit, this needs to be uncommented and tested.
+Suggestions for Future Development/Refinement:
+Conventional Commits for Changelog: Encourage or enforce a conventional commit message format (e.g., feat: ..., fix: ..., docs: ..., chore: ...). This would allow generate_changelog_entry to produce a more structured and informative changelog automatically.
+Interactive Mode: Add an interactive mode that prompts the user for confirmation before performing Git operations like commit, tag, and push.
+Pre-computation of Next Version: Add logic to suggest the next semantic version (patch, minor, major) based on the types of commits since the last release (requires conventional commits).
+Integration with CI/CD: Design the script so it can be easily integrated into a CI/CD pipeline for automated releases (e.g., on merges to the main branch or when a release tag is pushed).
+Dry Run Mode: Add a --dry-run option that simulates all steps (version updates in memory, changelog generation) and shows what Git commands would be run, without actually modifying files or the repository.
+Rollback Capability (Advanced): For critical failures during the process (especially after local commits/tags but before a successful push), implement or document a clear rollback procedure.

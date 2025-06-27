@@ -1,0 +1,100 @@
+OSCAR-C Project Documentation: models/datatypes.py
+File Path: models/datatypes.py
+Purpose and Role:
+This script defines the core data structures used within the OSCAR-C architecture for representing fundamental informational elements: knowledge (Predicate), the agent's integrated subjective experience (PhenomenalState), and objectives (Goal). These dataclasses provide a structured, type-hinted, and consistent way for different cognitive components to create, share, and interpret information.
+Theoretical Basis / Cognitive Inspiration:
+Predicate:
+Represents knowledge in a symbolic, relational format (e.g., name(arg1, arg2, ...) = value), a common approach in classical AI and knowledge representation systems (e.g., logic programming, semantic networks). This aligns with systems that store and reason over declarative knowledge (Laird, Newell, & Rosenbloom, 1987, for Soar; Anderson, 1996, for ACT-R).
+The inclusion of a timestamp allows for basic temporal tagging of facts, essential for reasoning about changing states or the recency of information.
+PhenomenalState:
+Aims to capture a snapshot of the agent's integrated "conscious experience" for a given cognitive cycle. This is inspired by theories of consciousness that emphasize the unified and integrated nature of subjective awareness.
+The content field, derived primarily from the Global Workspace, reflects GWT's notion of globally available information constituting the contents of consciousness (Baars, 1988).
+intensity and valence attempt to add rudimentary affective or qualitative dimensions to experience, which are known to modulate cognition in biological systems.
+The fields distinct_source_count, content_diversity_lexical, and shared_concept_count_gw are designed as proxies for concepts from Integrated Information Theory (IIT), specifically differentiation (richness and diversity of information) and integration (interconnectedness of information) (Tononi, 2004; Oizumi, Albantakis, & Tononi, 2014). The integration_level field is an older proxy also related to these concepts.
+Goal:
+Represents objectives in a structured, hierarchical manner. The use of preconditions, success_criteria, and failure_criteria (composed of Predicates) provides a declarative way to specify goal states and the conditions for pursuing or achieving them. This is fundamental to goal-driven AI systems and planning.
+The hierarchical nature (parent_goal_id, sub_goal_ids) supports complex task decomposition, aligning well with paradigms like HTN planning (Ghallab, Nau, & Traverso, 2004).
+priority allows for managing multiple competing objectives.
+Implementation Details:
+The script utilizes Python's dataclasses module for defining these structures.
+Predicate dataclass:
+Fields:
+name: str: The predicate's name (e.g., "isFile").
+args: Tuple[Any, ...]: A tuple of arguments for the predicate.
+value: bool = True: The truth value of the predicate.
+timestamp: float = field(default_factory=time.time): Timestamp of assertion/update.
+__hash__ method: Computes a hash based on name, args, and value. It includes a try-except TypeError block that logs an error and re-raises the TypeError if any element in args is unhashable. This makes errors explicit if predicates with unhashable arguments are used in sets or as dictionary keys.
+__eq__ method: Defines equality based on name, args, and value, intentionally ignoring timestamp. Two predicates represent the same fact if these three components match.
+PhenomenalState dataclass:
+Fields:
+content: Dict[str, Any]: The primary content of the experience, typically derived from the Global Workspace.
+intensity: float = 1.0: Normalized (0-1) subjective intensity.
+valence: float = 0.0: Normalized (-1 to 1) subjective emotional tone.
+integration_level: float = 0.0: Older proxy for information integration.
+attention_weight: float = 0.0: Salience of this phenomenal state itself.
+timestamp: float = field(default_factory=time.time): Generation timestamp.
+Φ-Proxy Sub-metrics (New Additions):
+distinct_source_count: int = 0: Number of unique information source types contributing.
+content_diversity_lexical: float = 0.0: Lexical diversity (e.g., TTR) of textual content.
+shared_concept_count_gw: float = 0.0: Proportion of concepts shared across items in the Global Workspace.
+Comments indicate placeholders for other optional/future Φ-Proxy sub-metrics.
+Goal dataclass:
+Fields:
+description: str: Textual description.
+id: str = field(default_factory=lambda: str(uuid.uuid4())): Unique identifier.
+parent_goal_id: Optional[str] = None: ID of the parent goal in a hierarchy.
+sub_goal_ids: List[str] = field(default_factory=list): IDs of sub-goals.
+preconditions: Set[Predicate] = field(default_factory=set): Predicates that must be true to start/pursue the goal.
+success_criteria: Set[Predicate] = field(default_factory=set): Predicates defining successful completion.
+failure_criteria: Set[Predicate] = field(default_factory=set): Predicates defining failure.
+priority: float = 1.0: Numeric priority.
+time_limit: Optional[float] = None: Optional deadline.
+status: Optional['GoalStatus'] = field(default=None): Current status (using string literal for forward reference to GoalStatus enum).
+creation_time: float = field(default_factory=time.time): Timestamp of creation.
+__post_init__ method:
+Attempts to import GoalStatus from .enums using an alias _GoalStatus_dt.
+If self.status is None and _GoalStatus_dt and its ACTIVE member are available, it sets self.status = _GoalStatus_dt.ACTIVE.
+Includes logging warnings if the enum or ACTIVE member is not found, and falls back to setting status to the string "UNKNOWN".
+create_goal_from_descriptor(goal_desc: str, priority: float = 1.0) -> Optional[Goal] function:
+A utility function to simplify the creation of basic Goal objects.
+Dynamically attempts to get references to Goal and Predicate classes from the global scope using globals().get(). If not found, logs an error and returns None.
+Generates a unique ID for the new goal.
+Creates default success_criteria and failure_criteria Predicate objects based on the new goal's ID (e.g., Predicate("isState", (f"goal_{new_id}", "achieved"), True)).
+Returns the instantiated Goal object or None.
+Algorithms Used:
+Not applicable (this script defines data types, not algorithms, though Predicate.__hash__ implements a hashing algorithm).
+Relationship to Overall Project & Logic Flow:
+These data structures are fundamental and pervasive throughout OSCAR-C:
+Predicate:
+Used by KnowledgeBase as the primary unit of stored information.
+Used by HTNPlanner to define operator/method preconditions and effects, and to represent the current world state for planning.
+Generated by various components to log events or specific states (e.g., actionOccurred, isFile).
+Used in Goal criteria.
+PhenomenalState:
+Generated by ExperienceStream in each cognitive cycle.
+Consumed by ConsciousnessLevelAssessor to determine the agent's ConsciousState and calculate the phi_proxy_score.
+Consumed by NarrativeConstructor to provide context and emotional coloring for narrative entries.
+Potentially consumed by DynamicSelfModel to update internal state awareness or by MetaCognitiveMonitor for analysis.
+Goal:
+Managed by AgentController in its active_goals list.
+Primary input to HTNPlanner for plan generation.
+Status is updated by AgentController based on planning and execution outcomes.
+May be generated by EmergentMotivationSystem or through user input mapping in AgentController.
+Analyzed by MetaCognitiveMonitor for issues like stagnation.
+The design of these dataclasses, particularly the inclusion of new fields in PhenomenalState and the hashability of Predicate, directly supports the implementation of planned features like the Φ-Proxy and robust goal management.
+Current State of the Script:
+Functionality Implemented:
+All three dataclasses (Predicate, PhenomenalState, Goal) are defined.
+The PhenomenalState dataclass includes the new fields distinct_source_count, content_diversity_lexical, and shared_concept_count_gw, which is a critical update.
+Predicate includes __hash__ and __eq__ methods.
+Goal.__post_init__ correctly attempts to set a default status using the imported GoalStatus enum.
+create_goal_from_descriptor utility function is implemented.
+Alignment with Plans: The definitions align with the structural requirements outlined in the project plans. The updates to PhenomenalState and Predicate are direct implementations of Phase I tasks from the development checklist.
+Known Limitations/Placeholders:
+Predicate.__hash__ relies on args being hashable. While it logs and re-raises TypeError, robust handling by callers is essential.
+PhenomenalState's integration_level is noted as potentially less central once the full Φ-Proxy is active. The optional Φ-Proxy sub-metrics are commented out, awaiting future implementation.
+The dynamic globals().get() lookups in create_goal_from_descriptor are functional but less ideal for strictly packaged applications compared to direct imports.
+Suggestions for Future Development/Refinement:
+Predicate Args Hashability: Consider adding a helper function or a convention for ensuring Predicate.args always contains hashable elements, or refine the __hash__ method to have a more robust fallback (e.g., hashing str(self.args)) if unhashable arguments become a common and accepted use case (though this can lead to hash collisions if str() representations are not unique).
+PhenomenalState Richness: As the system evolves, more fields representing different qualitative aspects of experience or more detailed sub-metrics for integration/differentiation could be added to PhenomenalState.
+Goal Structure: For more complex goal interactions, additional fields like constraints, utility, or estimated_difficulty could be considered for the Goal dataclass.

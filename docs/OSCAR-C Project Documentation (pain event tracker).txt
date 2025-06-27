@@ -1,0 +1,40 @@
+OSCAR-C Project Documentation: PainEventTracker (agent_helpers/cognitive_trackers.py)
+1. Purpose and Role in OSCAR-C
+The PainEventTracker is a specialized helper class within OSCAR-C, primarily designed to support the AttentionController in managing the agent's focus on internal "pain" signals. Its core purpose is to implement a "rumination avoidance" mechanism. It tracks which specific PainSource events have recently been present in the agent's Global Workspace (GWM). If a particular PainSource appears too frequently or persistently in the GWM, the tracker signals that it should be temporarily suppressed from gaining high attention. This prevents the agent from becoming pathologically fixated on a single source of pain, allowing other relevant information to enter its conscious focus. The tracker also includes logic to allow a suppressed pain event to regain salience after a period of not being in the GWM, ensuring that unresolved issues are not permanently ignored.
+2. Theoretical Basis and Cognitive Inspiration
+The PainEventTracker draws inspiration from cognitive and psychological concepts related to attention and negative affect:
+Attentional Bias towards Negative Stimuli: Negative or threatening stimuli (like internal "pain" signals) often have a high capacity to capture attention. The OSCAR-C system models this by making PainSource objects salient candidates for the AttentionController.
+Rumination: In human psychology, rumination refers to the tendency to repetitively think about the causes, situational factors, and consequences of one's negative emotional experience (Nolen-Hoeksema, 1991). While some reflection is adaptive, excessive rumination can be maladaptive, hindering problem-solving and focus on other tasks.
+Cognitive Control and Attentional Switching: Healthy cognitive systems possess mechanisms for cognitive control that allow them to disengage from a current focus and switch attention to other relevant information, even if the initial focus was highly salient. The PainEventTracker provides a rudimentary computational analogue of this control, preventing the agent's attention from being perpetually captured by pain.
+Habituation/Adaptation (Implicit): The mechanism allowing a pain event to eventually be re-evaluated (after inactive_reset_cycles) can be seen as a form of allowing for changed circumstances or a fresh look at an old problem, rather than indefinite suppression.
+3. Functional Overview and Implementation
+The PainEventTracker maintains a history of PainSource IDs that have been broadcast by the GlobalWorkspaceManager.
+3.1. Configuration
+The tracker's behavior is determined by parameters typically configured within the AttentionController's settings in config.toml and passed during instantiation:
+pain_rumination_threshold: An integer defining how many times a specific PainSource ID needs to appear in the recent GWM history to be considered for attentional suppression due to rumination.
+rumination_window_multiplier: An integer that, when multiplied by pain_rumination_threshold, determines the maximum length of the internal history deque (_pain_gwm_history). This defines the "recency window" for counting occurrences.
+inactive_reset_cycles: An integer representing the number of agent cognitive cycles a PainSource ID must be absent from the GWM before its historical entries related to rumination counting are pruned. This allows a previously suppressed pain to potentially become salient again if it hasn't been attended to for a while.
+3.2. State Management
+_pain_gwm_history: A collections.deque storing tuples of (pain_id_str, cycle_count_it_was_in_gwm). This deque has a fixed maximum length (max_history).
+_last_recorded_in_gwm: A dictionary mapping pain_id_str to the agent cycle_count when that pain ID was last recorded as being in the GWM. This helps the cleanup mechanism identify truly inactive pain events.
+3.3. Key Methods
+record_pain_in_gwm(pain_id, cycle_count_in_gwm):
+Called by the AttentionController (or a mechanism within AgentController that monitors GWM content) after each cognitive cycle.
+If a PainSource (identified by pain_id) was part of the broadcast_content from the GlobalWorkspaceManager in the specified cycle_count_in_gwm, this method appends the (pain_id, cycle_count_in_gwm) tuple to _pain_gwm_history and updates _last_recorded_in_gwm.
+should_suppress_rumination(pain_id_to_check, current_agent_cycle):
+Called by the AttentionController when it is evaluating a PainSource candidate.
+First, it triggers _cleanup_inactive_entries(current_agent_cycle) to remove stale history for pain events that haven't been in the GWM recently.
+Then, it counts the occurrences of pain_id_to_check within the current (cleaned) _pain_gwm_history.
+If this recent_occurrence_count is greater than or equal to the configured rumination_threshold, the method returns True (indicating the AttentionController should suppress or down-weight this pain candidate). Otherwise, it returns False.
+_cleanup_inactive_entries(current_agent_cycle):
+This private helper method is responsible for maintaining the relevance of the history.
+It identifies PainSource IDs in _last_recorded_in_gwm whose last recorded appearance in the GWM was more than inactive_reset_cycles ago relative to current_agent_cycle.
+It then rebuilds _pain_gwm_history and _last_recorded_in_gwm, removing all entries associated with these identified inactive pain IDs. This ensures that pain events not recently attended to can "reset" their rumination count and fairly compete for attention again.
+get_status_summary(): Returns a dictionary summarizing the tracker's current configuration and state, useful for debugging and telemetry.
+4. Integration within the OSCAR-C Architecture
+Instantiation: An instance of PainEventTracker is typically created and managed by the AttentionController during its initialization, configured with parameters from config.toml.
+AttentionController Interaction:
+After the GlobalWorkspaceManager determines its broadcast_content for a cycle, the AttentionController identifies any PainSource items within that content and calls PainEventTracker.record_pain_in_gwm() for each.
+When the AttentionController is calculating salience scores for attention candidates in a subsequent cycle, if a candidate is a PainSource, it calls PainEventTracker.should_suppress_rumination(). If this returns True, the AttentionController significantly reduces the attention weight assigned to that PainSource candidate for the current cycle.
+AgentController Role: The AgentController provides the current_agent_cycle count, which is essential for the tracker's time-based logic (especially for _cleanup_inactive_entries).
+The PainEventTracker provides a nuanced mechanism for OSCAR-C to manage its attentional focus when dealing with internal "pain" signals. It allows pain to be salient but prevents it from perpetually dominating the agent's cognitive resources, enabling a balance between addressing aversive states and pursuing other goals or processing other relevant information.

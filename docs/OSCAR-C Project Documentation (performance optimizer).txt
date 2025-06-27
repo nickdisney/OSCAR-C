@@ -1,0 +1,103 @@
+OSCAR-C Project Documentation: cognitive_modules/performance_optimizer.py
+File Path: cognitive_modules/performance_optimizer.py
+Purpose and Role:
+The PerformanceOptimizer (PO) component is responsible for monitoring the computational performance of the OSCAR-C agent's cognitive cycle. It analyzes timing data for each step of the cycle, identifies performance bottlenecks (where components take longer than expected), assesses the overall system "health" relative to a target cycle time, and can suggest or record adjustments to configuration parameters of other components. If system health is critically low, it can also suggest a RecoveryMode for the AgentController to enact. Its goal is to help maintain the agent's operational efficiency and responsiveness.
+Theoretical Basis / Cognitive Inspiration:
+Resource Management / Cognitive Load: Biological cognitive systems have finite resources and mechanisms to manage cognitive load. When overloaded, performance degrades. The PO emulates a system-level check on computational load, akin to an organism sensing fatigue or processing strain.
+Meta-cognitive Regulation (Performance Focus): While MetaCognitiveMonitor focuses on the content and effectiveness of cognitive processes, the PO focuses on their efficiency. This is a form of meta-cognitive regulation targeted at the underlying computational performance.
+Homeostasis (Computational): By trying to keep the cognitive cycle time near a target and suggesting adjustments, the PO contributes to a form of computational homeostasis, ensuring the agent doesn't become too slow or unresponsive.
+Adaptive Systems: The ability to adjust parameters based on performance feedback is a hallmark of adaptive systems.
+Implementation Details:
+Inheritance:
+class PerformanceOptimizer(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+Configuration: Loaded during initialize.
+Reads its specific configuration from the performance_optimizer section of config.toml.
+Reads the main performance section for target_cycle_time.
+history_size: Max number of cycle profiles to store in self.cycle_history.
+cycle_thresholds_s: A dictionary mapping cognitive cycle section names (e.g., "planning", "attention") to their target maximum duration. Defaults to DEFAULT_OPTIMIZATION_THRESHOLDS_S if not in config or invalid.
+auto_apply_adjustments: Boolean (default False). If True, PO will merge suggested adjustments into self.config_changes and persist them.
+The path for persisting adjustments (performance_adjustments_path) is derived from agent_data_paths in the main config and agent_root_path.
+State Variables:
+cycle_history: Deque[Dict[str, float]]: Stores recent cycle profiles (dictionaries mapping section names to durations).
+optimization_thresholds: Dict[str, float]: Effective thresholds used for bottleneck detection.
+config_changes: Dict[str, Any]: A dictionary storing suggested/applied parameter adjustments for other components. This dictionary is loaded from and persisted to perf_adjustments.json.
+_target_cycle_time: float: The overall target duration for a single cognitive cycle.
+_adjustments_path: Optional[Path]: Absolute path to perf_adjustments.json.
+_RecoveryModeEnum: Reference to the RecoveryMode enum.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration. Sets up _adjustments_path and calls _load_persisted_changes() to load any previously saved adjustments into self.config_changes.
+def _load_persisted_changes(self);
+Loads self.config_changes from self._adjustments_path (JSON file) if it exists and is valid.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Input: Expects input_state to contain {"cycle_profile": Dict[str, float]}.
+History & Health: Adds the received cycle_profile to self.cycle_history. Calculates current_health_score using _assess_health().
+Bottleneck Identification: Iterates through the cycle_profile. If a component's duration exceeds its base_threshold (from self.optimization_thresholds), it's flagged as a bottleneck with a severity score (duration / base_threshold).
+Adjustment Generation (_generate_adjustments): If bottlenecks are found, this method is called.
+Current logic is rule-based and targets "planning" and "attention" bottlenecks:
+If "planning" is severe, suggests reducing max_depth. It calculates the new depth based on severity and the current max_planning_depth (which it reads from self._controller.config.performance.max_planning_depth, using self.config_changes.planning.max_depth as an override if PO already adjusted it).
+If "attention" is severe, suggests reducing max_candidates similarly.
+Returns a dictionary of suggested_adjustments.
+Applying Adjustments (_apply_and_persist_adjustments): If auto_apply_adjustments is true AND suggested_adjustments were made:
+Merges suggested_adjustments into self.config_changes.
+Saves the entire self.config_changes dictionary to self._adjustments_path (JSON file).
+Important: This PO method records the changes. The AgentController is responsible for reading these persisted changes from self.config_changes (via PerformanceOptimizer.get_status().active_config_adjustments) and updating its own live self.config or propagating them to components.
+Recovery Suggestion (_suggest_recovery_mode): Based on current_health_score, suggests a RecoveryMode enum member.
+Output: Returns a performance_analysis dictionary containing identified bottlenecks, health score, suggested adjustments (if any made by PO this cycle), applied adjustments (if auto-apply was on and PO made changes), and the suggested recovery_mode_needed.
+def _assess_health(self) -> float;
+Calculates a health score (0-1) by comparing the average total time of recent cycles in cycle_history to _target_cycle_time. health = target / average.
+def _suggest_recovery_mode(self, health_score: float) -> Optional['RecoveryMode'];
+Implements threshold-based logic:
+health < 0.1 -> HARD_RESET
+health < 0.2 -> MEDIUM_RESET
+health < HEALTH_CRITICAL_THRESHOLD (0.3) -> SOFT_RESET
+Otherwise -> None.
+def _generate_adjustments(self, bottlenecks: List[Dict]) -> Dict[str, Any];
+As described under process. Reads current config values from self._controller.config (e.g., performance.max_planning_depth or attention_controller.max_candidates), potentially overridden by PO's own self.config_changes, to determine the base for new suggestions.
+def _apply_and_persist_adjustments(self, adjustments: Dict[str, Any]) -> Dict[str, Any];
+As described under process. Merges adjustments into self.config_changes and saves to self._adjustments_path if it's set. Returns the changes that were newly applied/merged into self.config_changes.
+async def reset(self) -> None;
+Clears cycle_history and config_changes (in-memory). Does not delete the persisted file.
+async def get_status(self) -> Dict[str, Any];
+Returns current health score, history size, bottlenecks from the last cycle, and the full self.config_changes dictionary as active_config_adjustments. This is how AgentController accesses the PO's suggested changes.
+Algorithms Used:
+Sliding Window Averaging: For calculating average cycle time in _assess_health.
+Threshold-Based Bottleneck Detection: Comparing component durations to predefined or configured thresholds.
+Rule-Based Parameter Adjustment: Simple rules in _generate_adjustments to modify specific parameters based on bottleneck severity.
+JSON Persistence: For saving and loading self.config_changes.
+Relationship to Overall Project & Logic Flow:
+The PerformanceOptimizer is Step 12 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via input_state to process):
+cycle_profile: Dict[str, float]: Timing data for all sections of the just-completed cognitive cycle, provided by AgentController.profiler.
+Implicitly accesses AgentController.config (via self._controller) when generating adjustment suggestions to get current/default parameter values.
+Output (to AgentController):
+{"performance_analysis": Dict[str, Any]}: A dictionary containing:
+identified_bottlenecks
+current_health_score
+suggested_adjustments (changes PO thought of this cycle)
+adjustments_applied_this_cycle (changes PO merged into its self.config_changes this cycle)
+recovery_mode_needed: Optional[RecoveryMode]
+Influence / Downstream Effect (via AgentController):
+Recovery Mode: If recovery_mode_needed is set, AgentController calls _oscar_handle_recovery with this mode.
+Configuration Adjustments: After PO runs, AgentController (in its main loop, specifically in the "optimization" step handling) calls PO.get_status() to retrieve active_config_adjustments (which is PO.self.config_changes). The AgentController then iterates through these adjustments and updates its own live self.config dictionary. This updated AgentController.config is then available for other components (like HTNPlanner for max_planning_depth) to read at the start of their processing in subsequent cycles. This implements the dynamic adjustment feedback loop.
+Current State of the Script:
+Functionality Implemented:
+Cycle profile analysis, health assessment, and bottleneck identification.
+Rule-based generation of adjustment suggestions for planning.max_depth and attention.max_candidates.
+Persistence of suggested adjustments (self.config_changes) to a JSON file.
+Suggestion of RecoveryMode based on health score.
+Path configuration for the adjustments file is correctly handled using agent_root_path.
+Alignment with Plans:
+The mechanism where PO persists config_changes and AgentController reads them to update its own live config implements the "PerformanceOptimizer - Dynamic Adjustment Feedback Loop" from Phase II of the development checklist.
+The logic in _generate_adjustments to consult the AgentController.config for current parameter values before suggesting new ones is a key part of this closed loop.
+Known Limitations/Placeholders:
+Adjustment Logic Simplicity: The rules in _generate_adjustments are basic and only target two specific parameters. More sophisticated heuristics or learning mechanisms for generating adjustments are future work.
+Application of Changes: The PO itself only records changes. The AgentController is responsible for applying them to its live config. Individual components then need to be designed to use these dynamically updated config values (e.g., HTNPlanner now reads max_planning_depth from the live controller config at the start of its plan method). Not all components may support such dynamic reconfiguration of all their parameters without re-initialization.
+Suggestions for Future Development/Refinement:
+Smarter Adjustment Generation:
+Implement more sophisticated heuristics for parameter adjustments, considering interactions between components and parameters.
+Explore simple learning mechanisms (e.g., hill-climbing, bandit algorithms) where PO tries small adjustments and observes their impact on current_health_score or specific bottleneck durations over several cycles.
+Contextual Optimization Strategies: Allow optimization strategies or thresholds to vary based on AgentController.consciousness_level, active goal type, or meta-analysis from MetaCognitiveMonitor (e.g., prioritize stability over speed during critical tasks, or be more aggressive with optimization if the agent is idle or stuck).
+Safety Limits for Adjustments: Define safe operational bounds for all tunable parameters. Ensure that PO's suggested adjustments always stay within these predefined safe ranges to prevent it from destabilizing the system.
+More Granular Health Metrics: Beyond average cycle time, incorporate other metrics into the health assessment, such as goal achievement rate, error frequency from ErrorRecoverySystem, or consciousness stability from ConsciousnessLevelAssessor.

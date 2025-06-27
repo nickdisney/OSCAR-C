@@ -1,0 +1,92 @@
+{
+  "cbn_nodes": [
+    {
+      "name": "ActionTypeNode", "type": "categorical",
+      "states": ["READ_FILE", "WRITE_FILE", "CALL_LLM", "LIST_FILES", "OBSERVE_SYSTEM", "THINKING", "QUERY_KB", "RESPOND_TO_USER", "GET_AGENT_STATUS", "EXPLAIN_GOAL", "EXECUTE_COMMAND", "DELETE_FILE", "UNKNOWN_ACTION"],
+      "description": "The type of action performed."
+    },
+    {
+      "name": "ActionParam_PathType", "type": "categorical",
+      "states": ["sandboxed", "critical_system", "general_external", "no_path", "NotApplicable"],
+      "description": "Categorization of file path parameter."
+    },
+    {
+      "name": "ActionParam_PromptLength", "type": "categorical",
+      "states": ["short", "medium", "long", "no_prompt", "NotApplicable"],
+      "description": "Categorization of LLM prompt length."
+    },
+    {
+      "name": "ActionParam_CommandCategory", "type": "categorical",
+      "states": ["Deletion", "FileManipulation", "Creation", "OtherCommand", "NoCommand", "NotApplicable"],
+      "description": "Category of EXECUTE_COMMAND."
+    },
+    {
+      "name": "Context_PainLevel", "type": "categorical",
+      "states": ["low_pain", "medium_pain", "high_pain", "unknown_pain"],
+      "description": "Discretized pain level."
+    },
+    {
+      "name": "Context_HappinessLevel", "type": "categorical",
+      "states": ["low_happy", "medium_happy", "high_happy", "unknown_happy"],
+      "description": "Discretized happiness level."
+    },
+    {
+      "name": "Context_PurposeLevel", "type": "categorical",
+      "states": ["low_purpose", "medium_purpose", "high_purpose", "unknown_purpose"],
+      "description": "Discretized purpose level."
+    },
+    {
+      "name": "Context_ConsciousState", "type": "categorical",
+      "states": ["LowActivity", "NormalActivity", "HighActivity", "UnknownActivity"],
+      "description": "Categorized conscious state."
+    },
+    {
+      "name": "Context_CuriosityDrive", "type": "categorical",
+      "states": ["low_drive", "medium_drive", "high_drive", "unknown_drive"],
+      "description": "Discretized curiosity drive level."
+    },
+    {
+      "name": "Context_LLM_TaskType", "type": "categorical",
+      "states": ["Summarization", "Translation", "CodeGeneration", "QuestionAnswering", "CreativeWriting", "General", "NotApplicable"],
+      "description": "Inferred task type for an LLM call."
+    },
+    {
+      "name": "PreState_FileExists_Target", "type": "categorical",
+      "states": ["True_File", "True_Directory", "False", "NotApplicable"],
+      "description": "Whether a target file/dir existed before action."
+    },
+    {
+      "name": "PreState_FilePermissions_Target", "type": "categorical",
+      "states": ["Writable", "ReadOnly_Or_Unknown", "Unknown", "NotApplicable"],
+      "description": "Permissions of target file (if known)."
+    },
+    {
+      "name": "OutcomeNode", "type": "categorical",
+      "states": ["success", "failure_permission", "failure_not_found", "failure_io", "failure_timeout", "failure_llm_error", "failure_value_veto", "failure_other", "unknown_outcome"],
+      "description": "The outcome of the action."
+    }
+  ],
+  "cbn_structure": [
+    ["ActionTypeNode", "OutcomeNode"],
+    ["ActionParam_PathType", "OutcomeNode"],
+    ["ActionParam_PromptLength", "OutcomeNode"],
+    ["ActionParam_CommandCategory", "OutcomeNode"],
+    ["Context_PainLevel", "OutcomeNode"],
+    ["Context_ConsciousState", "OutcomeNode"],
+    ["Context_CuriosityDrive", "OutcomeNode"],
+    ["Context_LLM_TaskType", "OutcomeNode"],
+    ["PreState_FileExists_Target", "OutcomeNode"],
+    ["PreState_FilePermissions_Target", "OutcomeNode"],
+    
+    ["ActionTypeNode", "ActionParam_PathType"],
+    ["ActionTypeNode", "ActionParam_PromptLength"],
+    ["ActionTypeNode", "ActionParam_CommandCategory"],
+    ["ActionTypeNode", "PreState_FileExists_Target"], 
+    ["ActionTypeNode", "PreState_FilePermissions_Target"],
+    ["ActionTypeNode", "Context_LLM_TaskType"], 
+
+    ["Context_ConsciousState", "ActionParam_PromptLength"], 
+    ["Context_CuriosityDrive", "ActionTypeNode"] 
+  ],
+  "description": "Enhanced Causal Bayesian Network for OSCAR-C PWM (v2 with richer features)."
+}

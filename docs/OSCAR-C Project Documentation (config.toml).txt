@@ -1,0 +1,121 @@
+OSCAR-C Project Documentation: config.toml
+File Path: config.toml (Located at the root of the agent's operational directory, typically consciousness_experiment/config.toml)
+Purpose and Role:
+The config.toml file is the central configuration hub for the OSCAR-C agent. It uses the TOML (Tom's Obvious, Minimal Language) format for easy readability and parsing. This file allows developers and users to customize a wide range of parameters, thresholds, paths, and operational settings for the AgentController and its various cognitive components without modifying the Python source code. This separation of configuration from code is crucial for flexibility, experimentation, and managing different deployment environments.
+Theoretical Basis / Cognitive Inspiration:
+While a configuration file is a standard software engineering practice, its role in OSCAR-C can be loosely analogous to an organism's genetic predispositions or learned stable parameters that guide its overall behavior and responses. Just as an organism might have inherent sensitivities or processing biases, config.toml sets the baseline operational characteristics of the AI agent. Dynamic adjustments to some of these parameters (e.g., by PerformanceOptimizer) can be seen as a form of adaptation or learning at a meta-level.
+Structure and Key Sections:
+The config.toml file is organized into sections, typically corresponding to global agent settings or individual cognitive components.
+[filesystem]:
+max_list_items: (int) Max items returned by LIST_FILES action.
+max_read_chars: (int) Max characters read by READ_FILE action.
+allow_file_write: (bool) Enables/disables the WRITE_FILE action for safety.
+allow_overwrite: (bool) If writing is enabled, determines if existing files can be overwritten.
+[agent]:
+pid_file_name: (str) Name of the PID file (e.g., "oscar_c.pid").
+ui_meter_update_interval_s: (float) Frequency for sending bulk telemetry updates to the UI.
+goal_re_evaluation_interval_cycles: (int) How often the agent might reassess its goal stack (conceptual, not heavily used by current AgentController logic).
+default_goal_cooldown_cycles: (int) Minimum agent cycles before another default "Observe and learn" goal can be generated after one is completed.
+min_curiosity_for_observe: (float, 0-1) Minimum curiosity drive value required to generate the default "Observe and learn" goal.
+[agent_data_paths]:
+This critical section centralizes paths for various data files, resolved relative to the agent's root directory (where config.toml resides) unless an absolute path is provided.
+pid_directory: (str) Directory for the PID file (e.g., "run").
+kb_db_path: (str) Path to the SQLite database for KnowledgeBase.
+narrative_log_path: (str) Path to the JSONL file for NarrativeConstructor.
+self_model_path: (str) Path to the JSON file for DynamicSelfModel persistence.
+predictive_model_path: (str) Path to the JSON file for PredictiveWorldModel persistence.
+performance_adjustments_path: (str) Path to the JSON file where PerformanceOptimizer stores its suggested adjustments.
+[global_workspace]:
+capacity: (int) Max items in the Global Workspace.
+broadcast_threshold: (float, 0-1) Min attention weight for an item to enter the workspace.
+min_items_if_any_attended: (int) If no items meet threshold but some have attention, force this many top items in.
+[attention_controller]:
+recency_weight, hint_weight, goal_relevance_weight, novelty_bonus_weight, surprise_bonus_weight: (float) Weights for different attention factors.
+max_candidates: (int) Max attention candidates to process.
+softmax_temperature: (float) Controls sharpness of attention weight distribution.
+novelty_window_size: (int) History size for novelty detection.
+[consciousness_assessor]: (Parameters for Φ-Proxy v1 calculation)
+meta_conscious_threshold, conscious_threshold, pre_conscious_threshold, unconscious_threshold: (float, 0-1) Thresholds for phi_proxy_score to determine ConsciousState.
+diff_weight_sources, diff_weight_lexical: (float) Weights for differentiation score components.
+int_weight_shared_concepts: (float) Weight for integration score component.
+phi_contrib_diff, phi_contrib_int: (float) Contribution weights of differentiation and integration to the final phi_proxy_score.
+global_workspace_capacity_for_norm: (int) Used to normalize distinct_source_count. Should generally match global_workspace.capacity.
+[performance]:
+target_cycle_time: (float) Desired duration for one cognitive cycle in seconds.
+max_planning_depth: (int) Default maximum depth for HTNPlanner's decomposition search (can be dynamically overridden by PerformanceOptimizer).
+profiler_history_size: (int) Number of cycle profiles CycleProfiler keeps.
+[loop_detection]:
+window_size: (int) Number of recent actions to analyze.
+max_consecutive_actions: (int) Threshold for consecutive identical action loop.
+frequency_threshold: (float, 0-1) Threshold for high-frequency action loop.
+ignore_thinking_actions: (bool) If True, "THINKING" actions are excluded from loop analysis.
+[knowledge_base]:
+default_context_retrieval_count: (int) Default number of facts/memories retrieved for context (usage depends on specific query logic).
+[cognitive_cache]:
+default_ttl: (float) Default Time-To-Live for cached items in seconds.
+[telemetry]: (For future Developer Dashboard)
+enabled: (bool)
+host: (str)
+port: (int)
+[error_recovery]:
+max_error_history: (int) Max error records stored by ErrorRecoverySystem.
+frequency_window: (int) Window size for error frequency analysis.
+frequency_threshold: (int) Count threshold for escalating recovery mode.
+[dynamic_self_model]:
+learning_rate: (float, 0-1) Rate for updating capability/limitation confidences.
+max_invalid_paths: (int) Max size for the list of known invalid file paths.
+reflection_interval_cycles: (int) How often _perform_reflection is called.
+learning_events_history_size: (int) Max history for learning_events deque.
+[emergent_motivation_system]:
+detailed_evaluation_interval_cycles: (int) Interval for more detailed drive evaluation (not heavily used by current EMS logic, which updates every cycle).
+[emergent_motivation_system.drives.curiosity]: Sub-table for specific drive parameters.
+gain_prediction_error: (float) Factor for how much prediction error boosts curiosity.
+Other drive parameters (value, decay, gain_discovery, loss_repetition) can also be set here, otherwise component defaults are used.
+[narrative_constructor]:
+Parameters for significance detection (valence_change_threshold, intensity_threshold, drive_change_threshold, significance_threshold).
+max_length: Max entries in narrative deque.
+save_interval_s: How often to save the narrative log.
+Optional: llm_model_name, temperature to override defaults for narrative generation.
+[predictive_world_model]:
+initial_version: Starting version of the learned model.
+learning_rate: Conceptual learning rate (current model uses frequency counting).
+memory_length: Max entries in prediction_history.
+save_interval_versions: How many model version increments (due to learning from errors) before saving.
+[performance_optimizer]:
+history_size: Max cycle profiles for PO to analyze.
+Optional: auto_apply_adjustments (bool), cycle_thresholds_s (dict to override default component thresholds).
+[experience_stream]:
+intensity_factor: (float) Scaling factor for experience intensity.
+valence_decay: (float, 0-1) Rate for valence returning to neutral.
+Optional: custom_stopwords (list of strings).
+[meta_cognition]:
+Thresholds for detecting issues (stagnation_threshold_s, failure_rate_threshold, low_consciousness_threshold_s).
+history_size: For internal history tracking (e.g., recent consciousness levels).
+reflection_trigger_frequency_cycles: How often MCM might trigger deeper reflection (conceptual, not directly used by current MCM to trigger DSM's reflection).
+[llm_settings]:
+default_timeout_s: Default timeout for call_ollama.
+action_selection_temperature: Temperature for LLM if used in action selection (future).
+max_recent_turns_for_prompt: Max conversational turns to include in LLM prompts.
+intent_mapping_temperature: Specific temperature for _map_text_to_goal_via_llm.
+Loading and Usage:
+The AgentController loads config.toml during its __init__ method.
+The full config dictionary is passed to each cognitive component's initialize method.
+Components typically access their specific section (e.g., config.get("attention_controller", {})) and then retrieve individual parameters using .get("param_name", default_value).
+The AgentController itself also reads from various sections (e.g., agent, performance, agent_data_paths).
+The scripts/validate_config.py utility is used to check this file for required keys, types, and valid value ranges.
+Relationship to Overall Project & Logic Flow:
+config.toml is a foundational file that dictates the baseline operational parameters of the entire OSCAR-C system. It allows for:
+Customization: Tailoring agent behavior without code changes.
+Experimentation: Easily modifying parameters to observe their effect on agent performance and cognitive dynamics.
+Deployment Configuration: Setting up different configurations for development, testing, or different "personalities" of the agent.
+Safety: Parameters like filesystem.allow_file_write provide safety controls.
+Standardization: Ensures components look for their parameters in a consistent location.
+Current State of the File:
+The provided config.toml is comprehensive and covers parameters for almost all implemented components and planned features (especially for Phases I and II).
+It includes the new [agent_data_paths] section for centralized path management.
+It contains parameters for the Φ-Proxy calculations.
+It reflects parameters needed for advanced component logic (e.g., dynamic_self_model.reflection_interval_cycles, emergent_motivation_system.drives.curiosity.gain_prediction_error).
+Suggestions for Future Development/Refinement:
+Schema Definition: Consider creating a formal schema (e.g., using JSON Schema or a Pydantic model) that defines all expected sections, keys, types, and constraints. validate_config.py currently serves this role programmatically, but a declarative schema could be useful for documentation and automated validation tool integration.
+Environment-Specific Overrides: For different deployment environments (dev, staging, prod), implement a mechanism to overlay environment-specific configurations on top of the base config.toml (e.g., config.dev.toml).
+Dynamic Reloading (Advanced): For very long-running agents, explore mechanisms to allow some configuration parameters to be reloaded dynamically without restarting the entire agent (though this adds significant complexity). The current PerformanceOptimizer feedback loop already provides a mechanism for some parameters to be changed dynamically.

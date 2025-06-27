@@ -1,0 +1,81 @@
+OSCAR-C Project Documentation: cognitive_modules/loop_detector.py
+File Path: cognitive_modules/loop_detector.py
+Purpose and Role:
+The LoopDetector component is responsible for monitoring the OSCAR-C agent's recent action history to identify potentially unproductive behavioral loops. If a loop (such as a repeating sequence of actions or an overly frequent action) is detected, it signals this to the AgentController, which can then initiate an intervention (e.g., by changing the current goal or forcing an exploratory action) to break the agent out of the perseverative behavior. This contributes to the agent's robustness and efficiency by preventing wasted cycles on non-progressive activities.
+Theoretical Basis / Cognitive Inspiration:
+Perseveration and Cognitive Flexibility: In humans and animals, perseveration (the pathological repetition of a particular response or action) is often a sign of cognitive inflexibility or executive dysfunction (often associated with frontal lobe damage). A healthy cognitive system can detect when its current strategy is not working and switch to alternatives. The LoopDetector provides a basic mechanism for an AI to achieve a similar kind_of self-correction.
+Anomaly Detection: Loop detection can be seen as a specific form of anomaly detection applied to the agent's action stream.
+Self-Regulation: By identifying and enabling an escape from loops, this component contributes to the agent's overall self-regulation capabilities.
+Implementation Details:
+Inheritance:
+class LoopDetector(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+Configuration: Loaded during initialize from the loop_detection section of config.toml.
+window_size: int: The number of recent actions to consider for loop detection.
+max_consecutive_actions: int: The maximum number of times the exact same action type can appear consecutively to be flagged as a loop.
+frequency_threshold: float: A value between 0.0 and 1.0. If the frequency of the most common action type within the window_size exceeds this threshold, it's flagged as a high-frequency loop.
+ignore_thinking_actions: bool: If True, "THINKING" actions are filtered out from the history before loop detection is performed.
+State Variables:
+_kb: Optional[KnowledgeBase]: A reference to the KnowledgeBase component, used to query for recent action history.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters.
+Validates that frequency_threshold is within (0, 1], and ignore_thinking_actions is a boolean; uses defaults if invalid. Also validates window_size and max_consecutive_actions are positive.
+Requires and stores a valid reference to the KnowledgeBase instance from the controller. Fails initialization if KB is not available.
+async def detect_loops(self) -> Optional[Dict[str, Any]];
+This is the core detection logic.
+Query Action History:
+Queries self._kb.query_state({"recent_facts": fetch_count}) for recent eventOccurred predicates of type "actionExecution". fetch_count is determined based on window_size and whether ignore_thinking_actions is true (fetches more if filtering is needed).
+Parses these facts into a list of action dictionaries [{"type": action_type, "outcome": outcome, "timestamp": ts}, ...], sorted by timestamp descending.
+Filter Thinking Actions: If self.ignore_thinking_actions is True, removes actions with type == "THINKING" from the history.
+Windowing: Takes the most recent self.window_size actions from the (potentially filtered) list for analysis.
+Consecutive Action Loop Check:
+If len(recent_actions) >= self.max_consecutive_actions: Checks if the last self.max_consecutive_actions have the same action type.
+If so, returns a loop_info dictionary: {"type": "consecutive_action", "action_type": ..., "count": ..., ...}.
+High-Frequency Action Loop Check:
+Requires a minimum number of actions in the window to be meaningful (e.g., max(2, int(self.window_size * 0.5))).
+Uses collections.Counter to count frequencies of action types in the recent_actions window.
+If the frequency of the most_common_action exceeds self.frequency_threshold AND its count meets a minimum threshold (e.g., max(2, self.max_consecutive_actions - 1)), returns a loop_info dictionary: {"type": "high_frequency_action", "action_type": ..., "frequency": ..., ...}.
+Returns None if no loop is detected.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Calls self.detect_loops().
+Returns {"loop_info": loop_info_result} (where loop_info_result can be None).
+async def reset(self) -> None;
+A no-op as the LoopDetector is stateless beyond its configuration and relies on the KnowledgeBase for history.
+async def get_status(self) -> Dict[str, Any];
+Returns its configuration parameters and the status of its KnowledgeBase dependency.
+Algorithms Used:
+Sliding Window Analysis: Implicitly, by querying a fixed-size window of recent actions from the KB.
+Consecutive Sequence Detection: Simple iteration to check for N identical consecutive items.
+Frequency Analysis: Uses collections.Counter to determine the frequency of action types within the window.
+Relationship to Overall Project & Logic Flow:
+The LoopDetector is Step 7 in the AgentController's 12-step cognitive cycle.
+Inputs:
+Implicitly relies on the KnowledgeBase to provide recent action history. The AgentController ensures the KB is available and updated.
+Output (to AgentController):
+{"loop_info": Optional[Dict[str, Any]]}: A dictionary describing the detected loop (if any), or None.
+Downstream Consumers / Influence:
+AgentController: If loop_info is not None, the AgentController calls its _oscar_handle_loop method. This method typically intervenes by:
+Suspending the current active goal.
+Creating a new, high-priority intervention goal (e.g., "INTERVENTION: Analyze/break loop ...").
+Clearing the current plan, forcing a replan for the new intervention goal.
+The cycle may then continue (i.e., restart from Step 1 with the new goal state).
+NarrativeConstructor (Step 11): Receives loop_info as part of its input state and may use it as a trigger for generating a narrative entry (e.g., "I noticed I was repeating myself...").
+Current State of the Script:
+Functionality Implemented:
+Detection of both consecutive identical actions and high-frequency single actions is implemented.
+Configuration of window size, thresholds, and ignore_thinking_actions is functional.
+Integration with KnowledgeBase for action history retrieval is implemented.
+Alignment with Plans:
+Successfully implements the Phase I checklist items: "LoopDetector - Configuration: Make frequency_threshold ... configurable via config.toml" and "Add loop_detection.ignore_thinking_actions config option and implement filtering logic in detect_loops."
+Known Limitations/Placeholders:
+Simple Loop Types: Only detects simple repetition of single action types. Does not detect more complex patterns (e.g., A-B-A-B sequences, or loops involving different actions that lead back to the same problematic state).
+State Agnostic: Loop detection is based purely on the action sequence, not on whether the agent's internal state or the environment state is also looping or changing.
+KB Dependency: Relies entirely on the KnowledgeBase being accurately and timely populated with eventOccurred("actionExecution", ...) predicates by the AgentController.
+Suggestions for Future Development/Refinement:
+Detect More Complex Loop Patterns:
+Implement detection for alternating action sequences (e.g., A-B-A-B).
+Consider using sequence mining algorithms or Levenshtein distance (as suggested in chatGPTo3-oscar-c first eval.txt) for more flexible pattern matching.
+State-Aware Loop Detection: Incorporate information about the agent's state (e.g., from PhenomenalState or key KnowledgeBase predicates) into loop detection. A sequence of actions might only be problematic if it occurs repeatedly without a meaningful change in state.
+Parameter-Aware Loop Detection: Consider action parameters, not just action types. Repeating READ_FILE("a.txt") is different from READ_FILE("a.txt") then READ_FILE("b.txt").
+Learn Loop Signatures: Allow the agent to learn specific sequences of actions that have historically led to unproductive loops and flag them more proactively. This could involve feedback from MetaCognitiveMonitor.

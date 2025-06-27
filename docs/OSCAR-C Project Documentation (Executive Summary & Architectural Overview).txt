@@ -1,0 +1,54 @@
+OSCAR-C Project Documentation: Executive Summary & Architectural Overview
+Project: OSCAR-C (Optimal Self-Conscious Architecture for Reasoning)
+Version Context: Post-Phase II (Core Logic & Feedback Loops established, including PHP system), entering Phase III (Advanced Cognitive Features).
+Core Objective: To design, implement, and research a cognitive architecture capable of consciousness-adjacent properties, robust reasoning, and adaptive autonomy by integrating principles from cognitive science (GWT, IIT-proxies, HTN, Meta-cognition, Affective Computing) and advanced AI techniques.
+1. Architectural Philosophy & Vision:
+OSCAR-C moves beyond purely reactive or monolithic AI systems by proposing a modular, 12-step cognitive cycle. This cycle orchestrates a suite of specialized cognitive components, each responsible for distinct functions like perception, attention, memory, planning, learning, self-modeling, motivation, narrative construction, and value-based decision-making. The architecture emphasizes rich internal state representation, dynamic feedback loops between components, and the emergence of complex behavior from integrated processing rather than pre-programmed responses alone. The long-term vision is to create a platform for exploring the computational underpinnings of higher-order cognition and potentially proto-sentient characteristics.
+2. Key Architectural Pillars:
+AgentController (agent_controller.py): The central orchestrator managing the 12-step cognitive cycle, component lifecycles, data flow, and core execution logic. It has been refactored to delegate specific tasks (goal management, action execution, internal state upkeep) to helper managers.
+Cognitive Components (cognitive_modules/):
+Perception & Attention: AttentionController (multi-factor salience including novelty/surprise) and GlobalWorkspaceManager (GWT-inspired broadcast).
+Experience & Consciousness: ExperienceStream (integrates info into PhenomenalState, calculates Φ-Proxy sub-metrics) and ConsciousnessLevelAssessor (determines ConsciousState using Φ-Proxy v1, including differentiation/integration scores and self-reference checks).
+Memory & Knowledge: KnowledgeBase (SQLite-based persistent predicate store), CognitiveCache (TTL-based for performance), and groundwork for future semantic memory via external_comms.py and ChromaDB.
+Deliberation & Action: HTNPlanner (hierarchical task decomposition with iterative deepening, heuristics, plan caching, and low-CS adjustments), ActionExecutor (handles execution of diverse action types including file ops, LLM calls, and restricted OS commands).
+Learning & Adaptation: PredictiveWorldModel (adaptive learning of action-outcome frequencies, including contextual rules and prediction error generation), DynamicSelfModel (learns capabilities, limitations, path knowledge, identity traits via reflection, uses learning rate meta-parameters).
+Motivation & Affect: EmergentMotivationSystem (manages drives like curiosity, satisfaction, competence, influenced by PWM errors, goal outcomes, DSM changes, and P/H/P levels), and the integrated Pain/Happiness/Purpose (PHP) system within AgentController providing core affective feedback.
+Meta-Cognition & Self-Regulation: MetaCognitiveMonitor (detects goal stagnation, low CS, performance issues, and now META_CONSCIOUS state; can analyze KB for action history), LoopDetector (identifies repetitive actions), PerformanceOptimizer (analyzes cycle times, suggests config adjustments applied by AgentController), ErrorRecoverySystem (handles exceptions, suggests recovery modes).
+Self-Representation & Values: NarrativeConstructor (builds autobiographical log, uses LLM, stores summary predicates in KB, influenced by P/H/P and CS), and the upcoming ValueSystem (for ethical/preference-based evaluation of goals, plans, actions).
+Data Models & Protocols (models/, protocols.py): Standardized Predicate, PhenomenalState (with Φ-Proxy sub-metrics), Goal, PainSource, ValueJudgment dataclasses. CognitiveComponent and specialized protocols define clear interfaces. Enumerations (ConsciousState, GoalStatus, RecoveryMode, ValueCategory, AgentState) standardize discrete states.
+Configuration & Utilities (config.toml, scripts/): Centralized TOML configuration for all parameters. Utility scripts for validation, task tracking, documentation, release, and data migration.
+3. Core Cognitive Cycle (12 Steps - Orchestrated by AgentController):
+Perception & Early Prediction: Gather raw percepts (incl. user input, system state, pain sensor); PredictiveWorldModel makes initial predictions.
+Attention Allocation: AttentionController weights candidates (incl. pain sources, PWM errors for surprise).
+Global Workspace Update: GlobalWorkspaceManager selects salient items for broadcast_content.
+Experience Integration: ExperienceStream creates PhenomenalState (integrating broadcast, memories, context; calculating Φ-Proxy sub-metrics; influenced by P/H/P).
+Consciousness Assessment: ConsciousnessLevelAssessor determines ConsciousState and phi_proxy_score.
+Meta-Cognitive Monitoring: MetaCognitiveMonitor analyzes cognitive/performance state.
+Loop Detection: LoopDetector checks action history from KB; AgentController intervenes if loop detected.
+Planning & Goal Management: GoalLifecycleManager handles user input mapping (regex/LLM), goal selection/generation (influenced by EMS drives, PHP cooldowns). HTNPlanner generates plan (influenced by CS, using cache). (Future: ValueSystem evaluates plan).
+Action Selection & Execution: ActionExecutor executes action. (Future: ValueSystem vets action).
+Model Updates & Goal/PHP Status: Update HTNPlanner (current plan), goal status. Update PredictiveWorldModel (learning from error, generating last_prediction_error), DynamicSelfModel (learning from action outcome, reflection), EmergentMotivationSystem (drives update). Update P/H/P levels based on goal outcomes, DSM learning.
+Narrative Update: NarrativeConstructor creates entry if event is significant (incl. P/H/P changes, PWM errors), stores summary in KB.
+Performance Optimization & Cycle Control: PerformanceOptimizer analyzes cycle, suggests adjustments (read by AgentController to update live config). AgentController manages cycle timing. Existential P/H/P checks for shutdown.
+4. Current Development Stage & Immediate Focus:
+Phase II (Core Cognitive Logic Deepening & Feedback Loops): Largely complete. The foundational architecture, key component functionalities (including adaptive PWM, advanced DSM, PHP system, HTN enhancements like iterative deepening/caching/low-CS adjustment, PO feedback loop, user goal LLM mapping, basic CS feedback loops, narrative-KB predicates) are implemented.
+Current Immediate Focus (PHP System Stabilization - "Phase II.A"):
+Enhance logging and telemetry for P/H/P dynamics.
+Iteratively tune P/H/P parameters in config.toml via focused test scenarios.
+Refine pain generation logic (for planning/execution failures) in GoalLifecycleManager.
+Minor review of pain resolution logic.
+Next Major Block (After PHP Stabilization): Phase III - Advanced Cognitive Features.
+Starting with ValueSystem Implementation & Integration (C.1).
+5. Key Strengths of the OSCAR-C Design:
+Theoretical Richness: Strong grounding in multiple cognitive science and AI theories.
+Integrated Approach: Focus on the interaction of many cognitive functions rather than isolated capabilities.
+Internal State & Affective Modeling: The PhenomenalState and PHP system provide a basis for richer internal experience and motivation.
+Meta-Cognition & Self-Improvement: Components like MCM, DSM, PO, and learning mechanisms in PWM/HTN aim for adaptive and self-improving behavior.
+Modularity & Configurability: Promotes maintainability and experimentation.
+Detailed Planning: The existence of a comprehensive Master Development Plan itself.
+6. Primary Challenges & Research Areas:
+Operationalizing abstract cognitive/philosophical concepts (values, consciousness metrics, causality) into robust code.
+Managing computational complexity and maintaining real-time responsiveness as more advanced components are added.
+Bootstrapping knowledge and learning effectively (for HTN methods, causal models, value heuristics).
+Defining meaningful evaluation metrics for "consciousness-adjacent" features and overall agent intelligence/autonomy.
+Ensuring safety and ethical alignment, especially if OS integration or more significant autonomy is pursued (primary role of the ValueSystem).

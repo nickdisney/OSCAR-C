@@ -1,0 +1,226 @@
+OSCAR-C Operator's & Customization Manual
+Version 1.0 (For OSCAR-C based on current development state)
+Welcome to OSCAR-C!
+This manual is your guide to running, observing, and customizing the OSCAR-C artificial intelligence agent. You don't need to be an AI scientist to use this guide; it's designed to help you get OSCAR-C running and tweak its behavior through simple configuration changes.
+Table of Contents:
+What is OSCAR-C (Quick Overview)?
+Getting Started: Setup & Running OSCAR-C
+Prerequisites
+Installation (Conceptual)
+Running the Agent
+Stopping the Agent
+The Configuration File: config.toml - Your Main Control Panel
+How to Edit config.toml
+Key Sections and What They Mean:
+[filesystem]: Safe file interactions.
+[agent]: Core operational timers and limits.
+[agent_data_paths]: Where OSCAR-C saves its "memories."
+[llm_settings]: How OSCAR-C uses Language Models (like Ollama).
+[performance]: Affecting agent's speed and planning detail.
+Understanding "Internal States" ([internal_states]) - Pain, Happiness, Purpose.
+Customizing Agent "Drives" ([emergent_motivation_system]).
+Guiding Agent "Values" ([value_system]).
+Influencing the "Narrative" ([narrative_constructor]).
+Other component settings (Attention, Workspace, etc.)
+Tips for Making Changes
+Interacting with OSCAR-C (Basic UI - agent_ui.py)
+Starting the UI
+Sending Input
+Understanding UI Display
+Observing OSCAR-C: Logs and Data Files
+Main Agent Log (agent.log)
+Narrative Log (data/narrative_log.jsonl)
+Knowledge Base (data/oscar_c_kb.db) - (Briefly, for advanced users)
+Self-Model (data/self_model.json) & Predictive Model (data/predictive_model.json)
+Troubleshooting Common Issues
+Experimenting: Ideas for Customization
+1. What is OSCAR-C (Quick Overview)?
+OSCAR-C is an experimental Artificial Intelligence designed to think and learn in a more complex way than many simple AI programs. It has internal "states" like curiosity, a sense of pain/happiness/purpose, and even a basic understanding of its own capabilities. It tries to achieve goals, learns from its successes and failures, and even writes a diary (its "narrative"). You can influence its behavior and personality by changing its settings.
+2. Getting Started: Setup & Running OSCAR-C
+Prerequisites:
+Python: OSCAR-C is written in Python (version 3.10 or newer recommended).
+Ollama (or similar LLM server): For features like narrative generation and understanding user commands, OSCAR-C needs access to a Large Language Model. We assume you have Ollama installed and a model like "llama3:latest" or "mistral" pulled and running.
+Ensure Ollama is running before you start OSCAR-C. You can usually check this by opening a terminal and typing ollama list.
+Project Files: You need the complete OSCAR-C project folder.
+Installation (Conceptual - Your specific setup might vary):
+Open a Terminal/Command Prompt.
+Navigate to the OSCAR-C Project Folder:
+cd path/to/your/oscar-c-project-folder
+Use code with caution.
+Bash
+(Recommended) Create a Virtual Environment: This keeps OSCAR-C's Python packages separate.
+python -m venv venv_oscar
+Use code with caution.
+Bash
+Activate the Virtual Environment:
+Windows: venv_oscar\Scripts\activate
+macOS/Linux: source venv_oscar/bin/activate
+Install Required Packages:
+pip install -r requirements.txt
+Use code with caution.
+Bash
+(This requirements.txt should list packages like toml, pytest, websockets, psutil, ollama, sentence-transformers, chromadb, etc.)
+Running the Agent:
+Ensure Ollama is Running: (See Prerequisites).
+Open config.toml: This file is in the main OSCAR-C folder. Check its settings (see Section 3). For a first run, default settings are usually okay, but ensure any paths in [agent_data_paths] are writable.
+From the Main OSCAR-C Project Folder in your terminal (with virtual environment active):
+To run OSCAR-C without the simple UI:
+python -m consciousness_experiment.main --no-ui
+Use code with caution.
+Bash
+To run OSCAR-C with the simple UI (recommended for interaction):
+python -m consciousness_experiment.main
+Use code with caution.
+Bash
+(Assuming your main.py handles UI startup).
+You should see log messages appearing in your terminal. The agent is now "thinking"! If you started the UI, a small window should appear.
+Stopping the Agent:
+With UI: Closing the UI window should gracefully stop the agent.
+Without UI (or if UI close doesn't stop it):
+Press Ctrl+C in the terminal where OSCAR-C is running. This sends a shutdown signal.
+Wait a few seconds. If it doesn't stop, press Ctrl+C again.
+Emergency Stop (if Ctrl+C fails):
+Open a new terminal.
+Navigate to the scripts folder inside your OSCAR-C project.
+Run the kill script:
+Windows: python kill_agent.py (This assumes kill_agent.py handles Windows PID termination correctly, which can be tricky).
+macOS/Linux: python kill_agent.py or ./kill_agent.sh (if executable).
+This script reads the agent's Process ID (PID) from a file (usually in the run/ or /tmp/ directory, check config.toml [agent].pid_file_name and [agent_data_paths].pid_directory) and attempts to terminate the process.
+3. The Configuration File: config.toml - Your Main Control Panel
+The config.toml file is where you customize OSCAR-C's "personality," learning rates, and operational details. You can open and edit it with any text editor (like Notepad, VS Code, Sublime Text, etc.).
+How to Edit config.toml:
+Lines starting with # are comments and are ignored.
+Settings are grouped into sections like [agent] or [narrative_constructor].
+Values are typically numbers (e.g., capacity = 7), true/false (e.g., enabled = true), or text in quotes (e.g., host = "localhost"). Lists are in square brackets: custom_stopwords = ["oscar", "agent"].
+Key Sections and What They Mean:
+[filesystem]:
+allow_file_write = false: IMPORTANT SECURITY SETTING. If true, OSCAR-C could modify files on your computer (if its planner generates such actions). Keep false unless you are an advanced user and understand the risks.
+max_read_chars: How much of a file it reads at once. Larger might give more context but use more memory.
+[agent]:
+default_goal_cooldown_cycles: If OSCAR-C has nothing to do, it generates a default "Observe and learn" goal. This controls how often it can do that. Lower means more frequent default goals.
+min_curiosity_for_observe: How "curious" (0-1 scale) OSCAR-C needs to be to generate its default goal. Higher means it needs to be more bored/curious.
+max_consecutive_planning_failures, max_execution_failures_per_goal: How persistent OSCAR-C is before giving up on a specific goal. Higher values mean more persistence.
+[agent_data_paths]:
+These tell OSCAR-C where to save its "memories" like its knowledge base, narrative, self-model, etc. Usually, you don't need to change these unless you want to store data in a specific location or run multiple OSCAR-C instances with separate data.
+[llm_settings]:
+default_timeout_s: How long (seconds) OSCAR-C waits for a response from the Language Model (like Ollama) before giving up. If your LLM is slow, you might need to increase this. If set too low, features like narrative generation might fail often.
+intent_mapping_temperature: Controls creativity of LLM when understanding user text. 0.3 is fairly deterministic. Higher values (e.g., 0.7) make it more "creative" but potentially less accurate for specific commands.
+[performance]:
+target_cycle_time: OSCAR-C tries to complete one "thinking cycle" in this many seconds. If it's too slow, it might try to simplify its thinking. If you find OSCAR-C constantly resetting itself due to "health scores," increasing this value (e.g., from 0.1 to 1.0 or 2.0) can help make it more stable, especially if LLM calls are slow.
+max_planning_depth: How deeply it thinks ahead when making plans. Higher can find more complex solutions but takes more time.
+Understanding "Internal States" ([internal_states]) - Pain, Happiness, Purpose:
+OSCAR-C has internal "feelings" that affect its behavior.
+baseline_pain_age_factor: A tiny amount of "pain" that slowly increases as the agent "ages" (runs for more cycles).
+acute_pain_goal_fail_priority_scale_factor: How much "pain" a failed important goal causes. Higher means failures are more "painful."
+pain_event_decay_rate_per_cycle: How quickly "pain" from an event fades over time. Higher means faster recovery.
+happiness_from_goal_priority_scale_factor: How much "happiness" achieving an important goal gives.
+happiness_baseline_target: The "neutral" happiness level (0-10) OSCAR-C drifts towards.
+purpose_from_capability_gain_factor, purpose_from_high_priority_goal_factor: How much learning new things or achieving big goals increases its "sense of purpose."
+max_pain_shutdown_threshold, min_purpose_shutdown_threshold: If "pain" gets too high or "purpose" too low, OSCAR-C will shut down. You can adjust these to make it more or less resilient to "suffering" or "despair."
+Customizing Agent "Drives" ([emergent_motivation_system]):
+OSCAR-C has drives like Curiosity, Satisfaction, Competence.
+ems_low_cs_curiosity_boost_factor: If OSCAR-C is in a low "consciousness" state for a while, this boosts its curiosity to try and "wake up." Higher value = stronger boost.
+Under [emergent_motivation_system.drives.curiosity] (and similar for satisfaction, competence):
+gain_prediction_error (for curiosity): How much being "surprised" (world not behaving as expected) boosts curiosity.
+Other gain_... and loss_... factors control how different events affect each drive. Tweaking these can significantly change the agent's proactive behavior.
+Guiding Agent "Values" ([value_system]):
+This is an advanced feature that influences OSCAR-C's decisions.
+plan_rejection_value_threshold: If a plan scores too low on its values (e.g., is unsafe or very inefficient), it's rejected. Closer to 0 means stricter.
+action_safety_veto_threshold: If a single action is deemed too unsafe, it's vetoed. Closer to 0 means stricter safety.
+[value_system.value_weights]: You can change how much OSCAR-C cares about SAFETY vs. EFFICIENCY vs. USER_SATISFACTION, etc., by changing these weights. Higher number = more importance.
+[value_system.tradeoff_matrix]: For very specific conflicts (e.g., if SAFETY directly opposes EFFICIENCY for an action), this defines which value "wins." (More advanced).
+Influencing the "Narrative" ([narrative_constructor]):
+OSCAR-C writes a diary.
+timeout_s: How long to wait for the LLM to write a diary entry. If OSCAR-C seems slow or often resets due to "health scores," try reducing this timeout (e.g., from 1000.0 down to 10.0 or 5.0). The diary entries might be less detailed or fail more often, but the agent will run faster.
+valence_change_threshold, intensity_threshold, drive_change_threshold, etc.: These control how "sensitive" OSCAR-C is to events to decide if they are worth writing about. Lower values = more frequent diary entries.
+Other Component Settings: Many other components ([attention_controller], [global_workspace], etc.) have parameters you can tweak. The comments in config.toml usually explain what they do. For example:
+[attention_controller].max_candidates: How many things OSCAR-C considers paying attention to at once.
+[global_workspace].capacity: How many things it can "hold in mind" (in its conscious workspace) at once.
+Tips for Making Changes:
+One Change at a Time: If you change many things at once, it's hard to see what caused a new behavior.
+Small Increments: For numerical values, change them by small amounts first.
+Backup config.toml: Before making big changes, save a copy of your config.toml file.
+Read the Comments: The comments (# ...) in config.toml explain what most settings do.
+Check Logs: After making a change and running OSCAR-C, look at agent.log to see if the new settings are being used and how they affect behavior.
+4. Interacting with OSCAR-C (Basic UI - agent_ui.py)
+If you start OSCAR-C with the UI enabled (usually the default for python -m consciousness_experiment.main), a simple window will appear.
+Starting the UI: It should start automatically if not run with --no-ui.
+Sending Input:
+There's usually an input box at the bottom.
+Type commands or questions here. OSCAR-C will try to understand them.
+Examples:
+list files : . (to list files in its current directory)
+read file : config.toml
+what is your current goal?
+status
+Simple conversational phrases like "hello" (it will likely try to generate a polite response).
+Understanding UI Display:
+Log Area: Shows messages from OSCAR-C, similar to the terminal log, but often filtered for important events or agent "speech."
+Status Indicators (if present): Might show current Consciousness State, Pain/Happiness/Purpose levels, current Goal, etc. The exact display depends on how agent_ui.py is designed.
+5. Observing OSCAR-C: Logs and Data Files
+OSCAR-C generates several files that can tell you what it's doing and "thinking." These are usually in a data/ subfolder inside your main OSCAR-C project folder (paths are set in config.toml [agent_data_paths]).
+Main Agent Log (agent.log - often just in your terminal output):
+This is the most detailed blow-by-blow account of the agent's internal processing.
+Look for messages like:
+Cycle X START/END
+Planning started for goal...
+Executing action: TYPE with params: ...
+Action TYPE outcome: success/failure
+CS Level Changed: ...
+Drives updated: {curiosity: ..., satisfaction: ...}
+P/H/P State: Pain:X, Happiness:Y, Purpose:Z
+ValueSystem evaluation scores.
+ERROR or WARNING messages here are important clues if something is wrong.
+Narrative Log (data/narrative_log.jsonl):
+This is OSCAR-C's "diary." Each line is a JSON object representing a diary entry.
+Contains the text of what OSCAR-C "wrote" and information about what triggered the entry.
+Example entry (simplified):
+{"timestamp": 167... , "content": "I decided to observe my surroundings, as my curiosity was high.", "triggering_event": {"drive_shift": 0.3}, ...}
+Use code with caution.
+Json
+Knowledge Base (data/oscar_c_kb.db):
+This is an SQLite database file. It's OSCAR-C's main long-term memory for facts.
+For advanced users: You can open this with an SQLite browser (like "DB Browser for SQLite") to see the predicates table. This shows what facts OSCAR-C "knows."
+Self-Model (data/self_model.json) & Predictive Model (data/predictive_model.json):
+These JSON files store what OSCAR-C has learned about its own abilities (self_model.json) and how it expects the world/actions to behave (predictive_model.json).
+Looking inside can give you a sense of its learning progress, but they can be complex.
+6. Troubleshooting Common Issues
+OSCAR-C doesn't start / crashes immediately:
+Check terminal for Python errors (e.g., ImportError if a package is missing, FileNotFoundError if config.toml is missing).
+Ensure Ollama (or your configured LLM server) is running and accessible.
+Run python scripts/validate_config.py to check your config.toml for errors.
+OSCAR-C is very slow or keeps resetting (mentions "HEALTH SCORE" and "RECOVERY MODE"):
+A common cause is LLM calls (especially for narrative) taking too long.
+Try this first: In config.toml, significantly increase [performance].target_cycle_time (e.g., to 2.0 or 3.0).
+And/or, significantly decrease [narrative_constructor].timeout_s (e.g., to 5.0 or 10.0).
+And/or, decrease [llm_settings].default_timeout_s.
+OSCAR-C only "THINKING" and not doing anything else:
+Its "Curiosity" drive might be too low to generate its default "Observe and learn" goal.
+Check [agent].min_curiosity_for_observe and compare with curiosity values in the log.
+Try increasing [emergent_motivation_system].ems_low_cs_curiosity_boost_factor in config.toml if it's stuck in low consciousness states.
+"Permission denied" errors:
+If [filesystem].allow_file_write = true, OSCAR-C might be trying to write to a folder it doesn't have permission for. Check file paths and permissions.
+It's safer to keep allow_file_write = false for general use.
+7. Experimenting: Ideas for Customization
+Once OSCAR-C is running, here are some ideas for tweaks via config.toml:
+Make it More "Emotional":
+Increase acute_pain_goal_fail_priority_scale_factor (more pain from failures).
+Increase happiness_from_goal_priority_scale_factor (more joy from success).
+Decrease pain_event_decay_rate_per_cycle (pain lasts longer).
+Observe changes in P/H/P logs and how they affect ExperienceStream valence and EmergentMotivationSystem drives.
+Make it More "Cautious" vs. "Brave":
+Increase [value_system.value_weights].safety significantly.
+Decrease action_safety_veto_threshold (e.g., from -0.7 to -0.5 makes it more likely to veto).
+Observe if it avoids certain actions or plans more often.
+Make it More "Curious" and Proactive:
+Lower [agent].min_curiosity_for_observe.
+Increase [emergent_motivation_system.drives.curiosity].gain_prediction_error or gain_discovery.
+Increase [emergent_motivation_system].ems_low_cs_curiosity_boost_factor.
+Observe if it generates its "Observe and learn" goal more often or tries more varied actions (once it has more actions defined in its HTN library).
+Change its "Planning Style":
+Decrease [performance].max_planning_depth for simpler, faster plans.
+Increase it for potentially better but slower plans.
+Change its "Narrative Voice":
+While you can't change the LLM prompt directly from config.toml (that's in the code), you can change [narrative_constructor].temperature. Higher temperature = more "creative" / random diary entries. Lower = more focused/predictable.
+Change how often it writes by tweaking the significance thresholds in [narrative_constructor].
+Remember to make changes one at a time and observe the logs to see the effect! Have fun exploring OSCAR-C's mind!

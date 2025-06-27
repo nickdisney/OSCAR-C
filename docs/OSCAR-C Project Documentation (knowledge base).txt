@@ -1,0 +1,111 @@
+OSCAR-C Project Documentation: cognitive_modules/knowledge_base.py
+File Path: cognitive_modules/knowledge_base.py
+Purpose and Role:
+The KnowledgeBase component serves as the primary persistent long-term declarative memory for the OSCAR-C agent. It stores factual information, beliefs, and records of events in the form of Predicate objects. This component allows the agent to accumulate knowledge over time, retain it across sessions, and provides a queryable store for other cognitive modules (e.g., HTNPlanner, MetaCognitiveMonitor) to access information about the world and the agent's history.
+Theoretical Basis / Cognitive Inspiration:
+Declarative Memory: In cognitive psychology, declarative memory refers to memories that can be consciously recalled, such as facts (semantic memory) and personal experiences (episodic memory) (Tulving, 2002). The KnowledgeBase primarily models a form of semantic memory by storing facts as predicates, although event predicates can also give it an episodic character.
+Symbolic Knowledge Representation: The use of Predicate objects (name(arg1, arg2, ...) = value) aligns with symbolic AI traditions where knowledge is represented in a structured, logical format. This is common in cognitive architectures like Soar (Laird, Newell, & Rosenbloom, 1987) and ACT-R (Anderson, 1996), which feature modules for declarative knowledge.
+Persistence and Learning: A learning agent requires a persistent memory to accumulate knowledge. The KnowledgeBase provides this, allowing the agent to build upon past information rather than starting fresh each session.
+World Model Component: While OSCAR-C has a PredictiveWorldModel, the KnowledgeBase stores the current known state of the world (or at least, the agent's beliefs about it), which is essential input for planning and prediction.
+Implementation Details:
+Inheritance:
+class KnowledgeBase(StateQueryable):
+It correctly implements the StateQueryable protocol, and by extension, the CognitiveComponent protocol. This ensures it fits into the agent's component lifecycle and provides a standardized query interface.
+Storage Backend:
+Uses SQLite as its persistent storage mechanism. The database file path is determined during initialize based on the agent_data_paths.kb_db_path configuration value, resolved relative to the AgentController's agent_root_path.
+Database Schema:
+A single table named predicates is used.
+Columns:
+id INTEGER PRIMARY KEY AUTOINCREMENT
+name TEXT NOT NULL
+args TEXT NOT NULL (Stores the Predicate.args tuple serialized as a JSON string)
+value BOOLEAN NOT NULL
+timestamp REAL NOT NULL
+A UNIQUE(name, args, value) constraint is defined on the table. This means that a predicate with the same name, arguments, and truth value cannot be inserted again; INSERT OR REPLACE effectively updates the timestamp of such an existing unique fact.
+Indices are created on name and timestamp columns to improve query performance.
+Concurrency Control:
+An asyncio.Lock (self._lock) is used to serialize access to the SQLite database, ensuring that read and write operations from different asynchronous tasks do not conflict. SQLite connections with check_same_thread=False are typically used in conjunction with external locking in asyncio applications.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Sets up the db_path based on the controller's agent_root_path and the kb_db_path from the agent_data_paths section of the configuration.
+Creates the parent directory for the database file if it doesn't exist.
+Establishes a connection to the SQLite database (check_same_thread=False).
+Sets self._connection.row_factory = sqlite3.Row to allow dictionary-like access to query results.
+Creates the predicates table and its indices if they do not already exist.
+Returns True on success, False on failure.
+async def assert_fact(self, predicate: 'Predicate');
+The primary method for adding or updating facts in the KnowledgeBase.
+Acquires the self._lock.
+Serializes predicate.args to a JSON string using json.dumps(predicate.args, sort_keys=True) for consistent representation, especially if args contain dictionaries.
+Consistency Management: Before inserting the new predicate, it executes a DELETE statement to remove any existing predicate with the same name and args but the opposite value. This ensures logical consistency by preventing P(A)=True and P(A)=False from coexisting.
+Uses INSERT OR REPLACE INTO predicates ... to add the new predicate. If a predicate with the same name, args, and value already exists, its timestamp is updated.
+Commits the transaction.
+Includes error handling for json.JSONDecodeError (though TypeError might be more likely during serialization if args are un-serializable) and sqlite3.Error.
+async def query(self, name: str, args: Optional[Tuple[Any, ...]] = None, value: Optional[bool] = True) -> List['Predicate'];
+Retrieves a list of Predicate objects from the database.
+Acquires the self._lock.
+Constructs a SQL SELECT query based on name and value.
+If args are provided, they are serialized to a JSON string (with sort_keys=True), and the query is extended with AND args = ? for an exact match.
+Deserializes the args JSON string from the database back into a Python tuple using json.loads(). It correctly handles cases where the JSON might represent a single item by ensuring the result args_tuple is always a tuple.
+Explicitly converts the boolean value from the database using bool(row["value"]).
+Returns a list of instantiated Predicate objects.
+async def check(self, predicate: 'Predicate') -> bool;
+A convenience method that checks if a specific Predicate (matching name, args, and value) exists by calling self.query() and checking if the result list is non-empty.
+async def query_state(self, query: Dict[str, Any]) -> Dict[str, Any]; (Implements StateQueryable protocol)
+Provides a structured interface for meta-queries about the KB's state.
+Acquires the self._lock.
+Supports queries such as:
+{"predicate_count": True}: Returns the total number of predicates.
+{"recent_facts": N}: Returns the N most recently asserted facts (currently as dictionaries, not Predicate objects directly from this specific query type, though all_facts returns Predicate objects).
+{"name_like": "pattern"}: Returns a count of predicates whose names match an SQL LIKE pattern (after basic wildcard conversion from * to %).
+{"all_facts": True, "limit": M}: Returns all predicates where value = 1 (true facts), or up to a limit M, as Predicate objects.
+Includes error handling for unsupported query types or database errors.
+async def reset(self) -> None;
+Clears all entries from the predicates table by executing DELETE FROM predicates.
+async def get_status(self) -> Dict[str, Any];
+Returns a dictionary containing the database path, total fact count, database file size (in MB), and the timestamps of the oldest and newest facts in the KB.
+async def shutdown(self) -> None;
+Commits any pending changes and closes the SQLite database connection.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Returns None as the KnowledgeBase is primarily reactive and doesn't produce direct output for the main cognitive cycle flow. Its state is modified by assert_fact calls and read by query or query_state calls.
+Algorithms Used:
+Predicate Assertion with Consistency: The assert_fact method implements a simple algorithm to maintain logical consistency: when asserting a fact (e.g., P(A)=True), it first removes its negation (P(A)=False) if present.
+JSON Serialization/Deserialization: Standard json.dumps and json.loads are used for storing and retrieving the Predicate.args tuple as a text field in the SQLite database. sort_keys=True is used during serialization for consistency if arguments involve dictionaries.
+Relationship to Overall Project & Logic Flow:
+The KnowledgeBase is a critical, central component:
+State Representation: It holds the agent's declarative knowledge about the world, its own past actions, and derived facts.
+AgentController:
+Instantiates and initializes the KnowledgeBase.
+May call assert_fact to record significant events (e.g., goal achievement, action execution details).
+Calls query_state (e.g., for {"all_facts": True}) to get the current world state for the HTNPlanner.
+May query for specific information to support other components or its own logic.
+HTNPlanner: Heavily relies on the KnowledgeBase to:
+Evaluate operator and method preconditions against the current world state (obtained via query or query_state).
+Simulate the effects of operators by conceptually updating a state representation derived from the KB.
+MetaCognitiveMonitor: Queries the KnowledgeBase (e.g., via query_state for recent_facts or specific event predicates) to analyze action history for goal stagnation checks or pattern detection.
+LoopDetector: Queries the KnowledgeBase for recent eventOccurred predicates related to action execution to detect loops.
+DynamicSelfModel: While it manages its own internal model, it might assert predicates into the KnowledgeBase about learned capabilities or limitations if designed for broader system access to this self-knowledge. The current DSM saves to its own JSON, but path knowledge predicates like isValidPath are asserted into the KB.
+NarrativeConstructor: May query the KB for context or past events to enrich narrative entries. The plan for Phase II includes having NarrativeConstructor assert predicates summarizing narrative entries into the KB.
+Other Components: Any component needing to store or retrieve persistent factual information would interact with the KnowledgeBase.
+Current State of the Script:
+Functionality Implemented:
+Core CRUD-like operations (assert, query) for predicates are functional.
+SQLite persistence is implemented.
+Concurrency control with asyncio.Lock is in place.
+Basic consistency management (removing opposite facts) is implemented.
+Path configuration for the database file is correctly handled using agent_root_path from the controller.
+The MRO fix (inheriting only from StateQueryable) is correctly implemented.
+Alignment with Plans: The KnowledgeBase provides the foundational persistent memory store required by the architecture.
+Known Limitations/Placeholders:
+Args Serialization: Relies on Predicate.args being JSON-serializable. Errors can occur if non-serializable types are passed within the args tuple without prior conversion.
+Query Capabilities: Current querying is primarily by exact name, value, and exact (serialized) arguments. More complex queries (e.g., pattern matching within args, temporal range queries) are not directly supported by simple query method signatures. query_state offers some broader queries but might not cover all needs.
+Return Type in query_state: The {"recent_facts": N} query in query_state returns a list of dictionaries, while {"all_facts": True} returns Predicate objects. This inconsistency could be standardized.
+Fact Retraction: No dedicated retract_fact(predicate) method that simply deletes a specific predicate exists. Facts are implicitly "updated" (timestamp changes) by INSERT OR REPLACE or removed if their opposite is asserted.
+Suggestions for Future Development/Refinement:
+Advanced Querying:
+Implement support for more sophisticated queries directly via the query method or new dedicated query methods. This could include pattern matching within predicate arguments (e.g., using SQLite's JSON functions if available and efficient, or by fetching and filtering in Python for more complex patterns).
+Add support for temporal range queries (e.g., "facts true between T1 and T2").
+Explicit Fact Retraction: Consider adding an async def retract_fact(self, predicate: 'Predicate') method that explicitly deletes a given predicate (matching name, args, and value) without asserting its opposite. This would be useful when a fact is no longer considered true or relevant, but its negation is not necessarily true either.
+Belief Strength/Uncertainty: For more nuanced reasoning, extend Predicate to include a belief strength or confidence score. This would require significant changes to assert_fact logic (e.g., how to combine or update belief strengths) and query mechanisms.
+Inference Engine: Integrate or build a simple forward or backward chaining inference engine that can derive new facts from existing ones based on a predefined set of rules.
+Historical Fact Management: Instead of DELETE or INSERT OR REPLACE always overwriting/removing, consider an option to mark facts as "retracted" or "superseded" with timestamps, allowing the agent to reason about what was true in the past. This adds complexity but supports richer temporal and counterfactual reasoning.

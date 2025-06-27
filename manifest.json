@@ -1,0 +1,9 @@
+{
+  "name": "Consciousness Experiment Agent",
+  "version": "0.1.0",
+  "description": "Hosts the 'consciousness starter kit' agent loop.",
+  "author": "You & AI Collaborator",
+  "entry_point_file": "agent_ui.py",
+  "gui_tab_function": "create_agent_tab",
+  "dependencies": "requirements_extra.txt"
+}

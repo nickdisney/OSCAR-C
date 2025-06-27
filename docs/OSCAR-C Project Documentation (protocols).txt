@@ -1,0 +1,48 @@
+OSCAR-C Project Documentation: protocols.py
+File Path: protocols.py
+Purpose and Role:
+This script defines the abstract interface protocols for the cognitive components within the OSCAR-C architecture. By using Python's typing.Protocol, it establishes formal "contracts" that concrete component classes must adhere to. This promotes a modular, loosely coupled design, enabling components to be developed, tested, and replaced independently while ensuring consistent interaction patterns with the AgentController and potentially other components.
+Theoretical Basis / Cognitive Inspiration:
+The concept of defining clear interfaces for interacting modules is a cornerstone of good software engineering and is particularly relevant for complex systems like cognitive architectures.
+Modularity in Cognitive Science: Many theories of mind and cognition propose a modular structure, where distinct cognitive functions are handled by specialized systems or modules (Fodor, 1983). While the degree of modularity is debated, designing an AI with distinct components for functions like planning, attention, and memory mirrors this approach. Protocols help define the expected behavior and communication channels of these conceptual modules.
+Interoperability and Extensibility: In AI research, especially for complex architectures, the ability to swap out or upgrade individual components without rewriting the entire system is crucial. Protocols facilitate this by defining a stable interface. For instance, if a new planning algorithm is developed, as long as it implements the Planner protocol, it can be integrated into OSCAR-C. (See Laird, 2012, for examples of how components evolve in architectures like Soar).
+Implementation Details:
+The script utilizes typing.Protocol and the @runtime_checkable decorator. This decorator allows isinstance() and issubclass() checks to be performed against these protocols at runtime, which can be useful for type validation and dynamic dispatch. Forward references (e.g., Predicate = 'Predicate') are used for type hints involving types defined in other modules (like models.datatypes) to prevent circular import issues at static analysis time.
+CognitiveComponent(Protocol):
+The base protocol for all major cognitive modules in OSCAR-C.
+Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;: Called by the AgentController at startup. It receives the global agent configuration (or a relevant subsection) and a reference to the controller instance. The controller: Any type hint is pragmatic to avoid circular dependencies but allows components to access shared AgentController methods or state if necessary (though direct inter-component calls are generally discouraged in favor of data flow through the cycle steps). Should return True on successful initialization.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];: The main method called by the AgentController during its corresponding step in the cognitive cycle. It receives an input_state dictionary (containing data from previous steps or relevant context) and is expected to return an output_state dictionary (containing its results for subsequent steps). Some components might return None if they don't directly output to the main cycle data flow (e.g., KnowledgeBase which is primarily reactive to assert_fact).
+async def reset(self) -> None;: Resets the component's internal state to a default or initial condition. This is invoked during certain recovery modes or for specific testing scenarios.
+async def get_status(self) -> Dict[str, Any];: Returns a dictionary summarizing the component's current operational status, key internal metrics, and relevant configuration parameters. Useful for telemetry, debugging, and meta-cognitive monitoring.
+async def shutdown(self) -> None;: Performs any necessary cleanup when the agent is stopping (e.g., closing database connections, saving state).
+Specific Component Protocols:
+These protocols inherit from CognitiveComponent and add methods specific to their specialized function. All are marked @runtime_checkable.
+AttentionMechanism(CognitiveComponent, Protocol):
+async def allocate_attention(self, candidates: Dict[str, Dict[str, Any]]) -> Dict[str, float];: Takes a dictionary of attention candidates and returns a dictionary mapping candidate IDs to their calculated attention weights. Implemented by AttentionController.
+WorkspaceManager(CognitiveComponent, Protocol):
+async def update_workspace(self, attention_weights: Dict[str, float], all_candidates_data: Dict[str, Dict[str, Any]]) -> Dict[str, Any];: Updates the internal workspace content based on received attention weights and candidate data. Returns the selected workspace content.
+async def broadcast(self) -> Dict[str, Any];: Returns the current content of the global workspace. Implemented by GlobalWorkspaceManager. (Note: GlobalWorkspaceManager.process often combines update and broadcast logic.)
+ExperienceIntegrator(CognitiveComponent, Protocol):
+async def integrate_experience(self, percepts: Dict[str, Any], memories: List[Any], context: Dict[str, Any], broadcast_content: Dict[str, Any]) -> PhenomenalState;: Takes various information sources and integrates them into a PhenomenalState object. Implemented by ExperienceStream.
+ConsciousnessAssessor(CognitiveComponent, Protocol):
+async def assess_consciousness_level(self, experience: Optional[PhenomenalState], workspace_content: Dict[str, Any]) -> ConsciousState;: Evaluates the provided phenomenal state and workspace content to determine the agent's current ConsciousState. Implemented by ConsciousnessLevelAssessor.
+Planner(CognitiveComponent, Protocol):
+async def plan(self, goal: Goal, current_state: Set[Predicate]) -> Optional[List[Dict[str, Any]]];: Takes a Goal object and the current world state (as a set of Predicate objects) and returns a plan (a list of action dictionaries) or None if planning fails. Implemented by HTNPlanner.
+StateQueryable(CognitiveComponent, Protocol):
+async def query_state(self, query: Dict[str, Any]) -> Dict[str, Any];: Allows structured querying of the component's internal state. Implemented by KnowledgeBase and potentially others.
+Algorithms Used:
+Not applicable (this script defines interfaces, not algorithms).
+Relationship to Overall Project & Logic Flow:
+protocols.py is central to OSCAR-C's modular architecture.
+AgentController: Relies on these protocols to interact with all cognitive components in a standardized way during initialization, the cognitive cycle (process), reset, status reporting, and shutdown. This decoupling means the AgentController does not need to know the specific implementation details of each component, only that it fulfills the agreed-upon contract.
+Cognitive Components: Each concrete component class (e.g., HTNPlanner, AttentionController) must implement the methods defined in CognitiveComponent and any more specific protocol it claims to adhere to (e.g., HTNPlanner implements Planner).
+Testing: These protocols are invaluable for testing. Mock objects can be created that implement a protocol, allowing individual components or the AgentController to be tested in isolation or with controlled dependencies.
+Extensibility: If a new type of planning mechanism or attention system were to be developed, as long as it implements the relevant protocol (Planner or AttentionMechanism), it can be integrated into the OSCAR-C system with minimal changes to the AgentController.
+Current State of the Script:
+Functionality Implemented: All listed protocols are defined with appropriate method signatures and type hints, including forward references for custom types. The @runtime_checkable decorator is consistently applied.
+Alignment with Plans: The script accurately reflects the planned protocol-based design, promoting modularity and clear component contracts. A previous "Correction applied during development" regarding component inheritance (inheriting only from the most specific protocol) is implicitly supported by this structure, as more specific protocols inherit from CognitiveComponent.
+Known Limitations/Placeholders: The controller: Any type hint in CognitiveComponent.initialize is a pragmatic choice to avoid circular dependencies but is less type-safe than a dedicated ControllerInterface protocol. For the current stage, Any is acceptable.
+Suggestions for Future Development/Refinement:
+Controller Interface Protocol: For enhanced type safety in component interactions with the AgentController, a ControllerInterface protocol could be defined. The AgentController would implement this, and components would type hint the controller parameter in initialize against this interface. This would make explicit which AgentController methods or attributes are intended for component use.
+Refine process Return Types: While Optional[Dict[str, Any]] is flexible for CognitiveComponent.process, as components mature, their specific output dictionaries could be defined as TypedDicts or dataclasses and referenced in more specific protocols to improve clarity on data flow. However, this might increase coupling if not managed carefully.

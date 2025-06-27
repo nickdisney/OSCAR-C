@@ -1,0 +1,70 @@
+{
+  "version": 0,
+  "causal_rules": {
+    "THINKING": {
+      "success": 63
+    },
+    "OBSERVE_SYSTEM": {
+      "success": 169
+    },
+    "RESPOND_TO_USER": {
+      "success": 4
+    }
+  },
+  "outcome_frequencies": {
+    "THINKING": {
+      "success": 63
+    },
+    "OBSERVE_SYSTEM": {
+      "success": 169
+    },
+    "RESPOND_TO_USER": {
+      "success": 4
+    }
+  },
+  "causal_context": {
+    "THINKING": {
+      "low_cs": {
+        "success": 45
+      },
+      "goal_informatio:high_cur:low_cs": {
+        "success": 9
+      },
+      "high_cur:high_sat:low_cs": {
+        "success": 2
+      },
+      "goal_informatio:high_cur:high_sat:low_cs": {
+        "success": 5
+      },
+      "goal_informatio:low_cs": {
+        "success": 2
+      }
+    },
+    "OBSERVE_SYSTEM": {
+      "goal_informatio:low_cs": {
+        "success": 27
+      },
+      "goal_informatio:high_cur:low_cs": {
+        "success": 55
+      },
+      "goal_informatio:high_cur:low_cs:low_sat": {
+        "success": 55
+      },
+      "goal_informatio:high_cur:high_sat:low_cs": {
+        "success": 32
+      }
+    },
+    "RESPOND_TO_USER": {
+      "low_cs": {
+        "success": 1
+      },
+      "goal_informatio:high_cur:low_cs": {
+        "success": 1
+      },
+      "goal_informatio:low_cs": {
+        "success": 2
+      }
+    }
+  },
+  "timestamp": 1747655067.21514
+}

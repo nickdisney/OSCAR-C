@@ -1,0 +1,2524 @@
+OSCAR-C Phase 2 – Production-Ready Development Roadmap v5.0
+Complete Implementation Guide with Code Specifications
+Executive Overview
+This document serves as the complete reference for implementing OSCAR-C Phase 2, transforming the theoretical architecture into production-ready code. It includes all code snippets, configuration details, and testing procedures needed for successful implementation.
+Phase 0: Bootstrap & Foundations (~½ day)
+0.1 Repository Setup
+bash# Create repository structure
+git clone <phase-1-repo> oscar_c/
+cd oscar_c/
+git checkout -b dev
+git checkout -b stage  
+git checkout -b prod
+git checkout dev
+
+# Verify Phase-1 tests still pass
+python -m pytest tests/ -v
+0.2 Planning Ledger Setup
+python# scripts/setup_planning.py
+"""Populate PLANNING.md with all checkboxes"""
+
+TASKS = [
+    # Phase 0
+    "☐ 0.1 Repository cloning and branch creation",
+    "☐ 0.2 Planning ledger initialization",
+    "☐ 0.3 Quality tooling setup",
+    "☐ 0.4 Configuration validation system",
+    "☐ 0.5 Emergency kill-switch implementation",
+    
+    # Phase 1
+    "☐ 1.1 Package structure creation",
+    "☐ 1.2 Dataclass definitions",
+    "☐ 1.3 Protocol interfaces",
+    "☐ 1.4 Smoke test framework",
+    
+    # ... continue for all phases
+]
+
+def create_planning_md():
+    with open("PLANNING.md", "w") as f:
+        f.write("# OSCAR-C Phase 2 Implementation Checklist\n\n")
+        for task in TASKS:
+            f.write(f"{task}\n")
+
+if __name__ == "__main__":
+    create_planning_md()
+0.3 Quality Guards Configuration
+yaml# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: v0.0.287
+    hooks:
+      - id: ruff
+        args: ['--fix', '--exit-non-zero-on-fix']
+  
+  - repo: https://github.com/psf/black
+    rev: 23.7.0
+    hooks:
+      - id: black
+        language_version: python3.11
+  
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.5.1
+    hooks:
+      - id: mypy
+        args: ['--strict', '--ignore-missing-imports']
+  
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        exclude: tests/
+0.4 Configuration Validation System
+python# oscar_c/validate_config.py
+"""Validates OSCAR-C configuration against requirements"""
+
+import sys
+import psutil
+from pathlib import Path
+import toml
+
+REQUIRED_CONFIG_KEYS = {
+    "global_workspace": ["capacity", "broadcast_threshold"],
+    "consciousness_thresholds": ["meta_conscious", "conscious", "pre_conscious"],
+    "performance": ["target_cycle_time", "max_planning_depth"],
+    "loop_detection": ["window_size", "max_consecutive_actions"],
+}
+
+HARDWARE_REQUIREMENTS = {
+    "min_cpu_cores": 4,
+    "min_ram_gb": 8,
+    "min_disk_gb": 10,
+}
+
+def validate_config():
+    """Validate configuration file and hardware"""
+    config_path = Path("oscar_c/config.toml")
+    
+    if not config_path.exists():
+        print("❌ config.toml not found")
+        return False
+    
+    try:
+        config = toml.load(config_path)
+    except Exception as e:
+        print(f"❌ Config parsing failed: {e}")
+        return False
+    
+    # Validate required keys
+    for section, keys in REQUIRED_CONFIG_KEYS.items():
+        if section not in config:
+            print(f"❌ Missing config section: {section}")
+            return False
+        for key in keys:
+            if key not in config[section]:
+                print(f"❌ Missing config key: {section}.{key}")
+                return False
+    
+    # Validate hardware requirements
+    cpu_count = psutil.cpu_count()
+    mem_gb = psutil.virtual_memory().total / (1024**3)
+    disk_gb = psutil.disk_usage("/").total / (1024**3)
+    
+    if cpu_count < HARDWARE_REQUIREMENTS["min_cpu_cores"]:
+        print(f"❌ Insufficient CPU cores: {cpu_count} < {HARDWARE_REQUIREMENTS['min_cpu_cores']}")
+        return False
+    
+    if mem_gb < HARDWARE_REQUIREMENTS["min_ram_gb"]:
+        print(f"❌ Insufficient RAM: {mem_gb:.1f}GB < {HARDWARE_REQUIREMENTS['min_ram_gb']}GB")
+        return False
+    
+    if disk_gb < HARDWARE_REQUIREMENTS["min_disk_gb"]:
+        print(f"❌ Insufficient disk space: {disk_gb:.1f}GB < {HARDWARE_REQUIREMENTS['min_disk_gb']}GB")
+        return False
+    
+    print("✅ Configuration and hardware validation passed")
+    return True
+
+if __name__ == "__main__":
+    sys.exit(0 if validate_config() else 1)
+0.5 Emergency Kill-Switch Script
+bash#!/bin/bash
+# scripts/kill_agent.sh
+"""Emergency kill-switch for OSCAR-C agent"""
+
+PID_FILE="/tmp/oscar_c.pid"
+
+if [ -f "$PID_FILE" ]; then
+    PID=$(cat "$PID_FILE")
+    echo "Sending SIGINT to PID $PID..."
+    kill -SIGINT "$PID"
+    
+    # Wait for graceful shutdown
+    sleep 2
+    
+    # Force kill if still running
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "Force killing PID $PID..."
+        kill -9 "$PID"
+    fi
+    
+    rm "$PID_FILE"
+    echo "✅ Agent stopped"
+else
+    echo "No agent running (no PID file found)"
+fi
+Phase 1: Skeleton & Interfaces (~1 day)
+1.1 Package Structure
+app/extensions/oscar_c/
+├── __init__.py
+├── agent_controller.py
+├── models/
+│   ├── __init__.py
+│   ├── datatypes.py
+│   └── enums.py
+├── protocols.py
+├── cognitive_modules/
+│   ├── __init__.py
+│   ├── knowledge_base.py
+│   ├── global_workspace.py
+│   ├── htn_planner.py
+│   ├── loop_detector.py
+│   ├── narrative_constructor.py
+│   ├── cognitive_cache.py
+│   └── performance_optimizer.py
+├── config.toml
+└── VERSION.toml
+1.2 Core Data Structures
+python# models/enums.py
+from enum import Enum
+
+class ConsciousState(Enum):
+    UNCONSCIOUS = 0
+    PRE_CONSCIOUS = 1
+    CONSCIOUS = 2
+    META_CONSCIOUS = 3
+    REFLECTIVE = 4
+
+class GoalStatus(Enum):
+    ACTIVE = "active"
+    PLANNING = "planning"
+    ACHIEVED = "achieved"
+    FAILED = "failed"
+    SUSPENDED = "suspended"
+
+class RecoveryMode(Enum):
+    SOFT_RESET = "soft_reset"
+    MEDIUM_RESET = "medium_reset"
+    HARD_RESET = "hard_reset"
+    SAFE_MODE = "safe_mode"
+python# models/datatypes.py
+from dataclasses import dataclass, field
+from typing import Dict, Any, Set, Optional, List, Tuple
+import time
+import uuid
+
+@dataclass
+class Predicate:
+    """Core knowledge representation"""
+    name: str
+    args: Tuple[Any, ...]
+    value: bool = True
+    timestamp: float = field(default_factory=time.time)
+    
+    def __hash__(self):
+        return hash((self.name, self.args, self.value))
+    
+    def __eq__(self, other):
+        if not isinstance(other, Predicate):
+            return NotImplemented
+        return (self.name == other.name and 
+                self.args == other.args and 
+                self.value == other.value)
+
+@dataclass
+class PhenomenalState:
+    """Unified conscious experience representation"""
+    content: Dict[str, Any]
+    intensity: float = 1.0
+    valence: float = 0.0
+    integration_level: float = 0.0
+    attention_weight: float = 0.0
+    timestamp: float = field(default_factory=time.time)
+
+@dataclass
+class Goal:
+    """Hierarchical goal representation"""
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    description: str
+    parent_goal_id: Optional[str] = None
+    sub_goal_ids: List[str] = field(default_factory=list)
+    preconditions: Set[Predicate] = field(default_factory=set)
+    success_criteria: Set[Predicate] = field(default_factory=set)
+    failure_criteria: Set[Predicate] = field(default_factory=set)
+    priority: float = 1.0
+    time_limit: Optional[float] = None
+    status: GoalStatus = GoalStatus.ACTIVE
+    creation_time: float = field(default_factory=time.time)
+    
+def create_goal_from_descriptor(goal_desc: str, priority: float = 1.0) -> Goal:
+    """Create basic goal from description"""
+    new_id = str(uuid.uuid4())
+    return Goal(
+        id=new_id,
+        description=goal_desc,
+        success_criteria={Predicate("isState", (f"goal_{new_id}", "achieved"))},
+        failure_criteria={Predicate("isState", (f"goal_{new_id}", "failed"))},
+        priority=priority
+    )
+1.3 Component Protocols
+python# protocols.py
+from typing import Protocol, Dict, Any, Optional
+
+class CognitiveComponent(Protocol):
+    """Standard interface for all OSCAR-C components"""
+    
+    async def initialize(self, config: Dict[str, Any], controller: Any) -> bool:
+        """Initialize component with configuration"""
+        ...
+    
+    async def process(self, input_state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Process input state and return output"""
+        ...
+    
+    async def reset(self) -> None:
+        """Reset component to initial state"""
+        ...
+    
+    async def get_status(self) -> Dict[str, Any]:
+        """Get component's current status"""
+        ...
+
+class StateQueryable(Protocol):
+    """Interface for components that maintain queryable state"""
+    
+    async def query_state(self, query: Dict[str, Any]) -> Dict[str, Any]:
+        """Query component state in structured format"""
+        ...
+    
+    async def get_status(self) -> Dict[str, Any]:
+        """Get component status summary"""
+        ...
+1.4 Smoke Test Framework
+python# tests/smoke/test_basic.py
+"""Basic smoke tests for OSCAR-C"""
+
+import pytest
+import asyncio
+import psutil
+import gc
+from oscar_c.agent_controller import AgentController
+
+async def run_cycles(cycles: int = 3):
+    """Run OSCAR-C for specified cycles"""
+    agent = AgentController(None, "test_model")
+    
+    # Run minimal cycles
+    for i in range(cycles):
+        await agent._run_single_cycle()
+    
+    await agent.shutdown()
+
+def test_basic_cycle_smoke():
+    """Test that agent can run 3 cycles without error"""
+    asyncio.run(run_cycles(3))
+
+def test_memory_stability():
+    """Test for memory leaks during operation"""
+    process = psutil.Process()
+    
+    # Get baseline memory
+    gc.collect()
+    start_memory = process.memory_info().rss / 1024 / 1024  # MB
+    
+    # Run test
+    asyncio.run(run_cycles(10))
+    
+    # Check for memory leaks
+    gc.collect()
+    end_memory = process.memory_info().rss / 1024 / 1024  # MB
+    
+    memory_increase = end_memory - start_memory
+    assert memory_increase < 10, f"Memory leak detected: {memory_increase:.1f}MB increase"
+
+def test_no_leaks():
+    """Test for resource leaks over many iterations"""
+    import resource
+    
+    for i in range(100):
+        async def small_cycle():
+            agent = AgentController(None, "test_model")
+            await agent._run_single_cycle()
+            await agent.shutdown()
+        
+        asyncio.run(small_cycle())
+        gc.collect()
+    
+    # Check file descriptors haven't leaked
+    soft_limit, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
+    current_fd_count = len(list(psutil.Process().open_files()))
+    assert current_fd_count < soft_limit / 2, "File descriptor leak detected"
+Component Initialization Order
+python# agent_controller.py
+COMPONENT_INIT_ORDER = [
+    "knowledge_base",
+    "cache",
+    "planner",
+    "global_workspace", 
+    "attention_controller",
+    "experience_stream",
+    "predictive_model",
+    "dynamic_self_model",
+    "motivation_engine",
+    "meta_cognition",
+    "loop_detector",
+    "consciousness_assessor",
+    "error_recovery",
+    "performance_optimizer",
+    "narrative_constructor"
+]
+Phase 2: Infrastructure Components (~2 days)
+2.1 Knowledge Base Implementation
+python# cognitive_modules/knowledge_base.py
+import asyncio
+import sqlite3
+import json
+from pathlib import Path
+from typing import Set, Optional, List, Dict, Any
+from ..models.datatypes import Predicate
+from ..protocols import StateQueryable
+
+class KnowledgeBase(StateQueryable):
+    """SQLite-backed predicate knowledge base"""
+    
+    def __init__(self, db_path: str = "oscar_c/knowledge.db"):
+        self.db_path = Path(db_path)
+        self._lock = asyncio.Lock()
+        self._connection = None
+        self._cursor = None
+    
+    async def initialize(self, config: Dict[str, Any], controller: Any) -> bool:
+        """Initialize database connection and schema"""
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        self._connection = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        self._cursor = self._connection.cursor()
+        
+        # Create predicates table
+        self._cursor.execute("""
+            CREATE TABLE IF NOT EXISTS predicates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                args TEXT NOT NULL,
+                value BOOLEAN NOT NULL,
+                timestamp REAL NOT NULL,
+                UNIQUE(name, args, value)
+            )
+        """)
+        
+        self._connection.commit()
+        return True
+    
+    async def assert_fact(self, predicate: Predicate):
+        """Assert a fact, replacing opposite if exists"""
+        async with self._lock:
+            args_json = json.dumps(predicate.args)
+            
+            # Remove opposite fact if exists
+            self._cursor.execute("""
+                DELETE FROM predicates 
+                WHERE name = ? AND args = ? AND value = ?
+            """, (predicate.name, args_json, not predicate.value))
+            
+            # Insert new fact
+            self._cursor.execute("""
+                INSERT OR REPLACE INTO predicates (name, args, value, timestamp)
+                VALUES (?, ?, ?, ?)
+            """, (predicate.name, args_json, predicate.value, predicate.timestamp))
+            
+            self._connection.commit()
+    
+    async def query(self, name: str, args: Optional[tuple] = None, 
+                    value: Optional[bool] = True) -> List[Predicate]:
+        """Query predicates with optional argument matching"""
+        async with self._lock:
+            if args is None:
+                self._cursor.execute("""
+                    SELECT name, args, value, timestamp 
+                    FROM predicates 
+                    WHERE name = ? AND value = ?
+                """, (name, value))
+            else:
+                args_json = json.dumps(args)
+                self._cursor.execute("""
+                    SELECT name, args, value, timestamp 
+                    FROM predicates 
+                    WHERE name = ? AND args = ? AND value = ?
+                """, (name, args_json, value))
+            
+            results = []
+            for row in self._cursor.fetchall():
+                results.append(Predicate(
+                    name=row[0],
+                    args=tuple(json.loads(row[1])),
+                    value=row[2],
+                    timestamp=row[3]
+                ))
+            
+            return results
+    
+    async def check(self, predicate: Predicate) -> bool:
+        """Check if specific predicate exists"""
+        results = await self.query(predicate.name, predicate.args, predicate.value)
+        return len(results) > 0
+    
+    async def query_state(self, query: Dict[str, Any]) -> Dict[str, Any]:
+        """Query KB state"""
+        async with self._lock:
+            if "predicate_count" in query:
+                self._cursor.execute("SELECT COUNT(*) FROM predicates")
+                count = self._cursor.fetchone()[0]
+                return {"predicate_count": count}
+            
+            if "recent_facts" in query:
+                n = query.get("recent_facts", 10)
+                self._cursor.execute("""
+                    SELECT name, args, value, timestamp 
+                    FROM predicates 
+                    ORDER BY timestamp DESC 
+                    LIMIT ?
+                """, (n,))
+                recent = []
+                for row in self._cursor.fetchall():
+                    recent.append({
+                        "name": row[0],
+                        "args": json.loads(row[1]),
+                        "value": row[2],
+                        "timestamp": row[3]
+                    })
+                return {"recent_facts": recent}
+            
+            return {"error": "Unsupported query"}
+    
+    async def get_status(self) -> Dict[str, Any]:
+        """Get KB status summary"""
+        async with self._lock:
+            self._cursor.execute("SELECT COUNT(*) FROM predicates")
+            count = self._cursor.fetchone()[0]
+            
+            self._cursor.execute("SELECT MIN(timestamp), MAX(timestamp) FROM predicates")
+            min_time, max_time = self._cursor.fetchone()
+            
+            return {
+                "component": "KnowledgeBase",
+                "status": "operational",
+                "fact_count": count,
+                "db_size_mb": self.db_path.stat().st_size / (1024 * 1024),
+                "oldest_fact": min_time,
+                "newest_fact": max_time
+            }
+2.2 Cognitive Cache Implementation
+python# cognitive_modules/cognitive_cache.py
+import asyncio
+import time
+from typing import Dict, Any, Optional, Callable
+
+class CognitiveCache:
+    """TTL-based cache for expensive computations"""
+    
+    def __init__(self, ttl: float = 1.0):
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, float] = {}
+        self._ttl = ttl
+        self._hits = 0
+        self._misses = 0
+        self._lock = asyncio.Lock()
+    
+    async def get_or_compute(self, key: str, compute_func: Callable) -> Any:
+        """Get cached value or compute and cache"""
+        async with self._lock:
+            current_time = time.time()
+            
+            # Check if value exists and is fresh
+            if (key in self._cache and 
+                (current_time - self._timestamps.get(key, 0)) < self._ttl):
+                self._hits += 1
+                return self._cache[key]
+            
+            self._misses += 1
+        
+        # Compute value outside lock to avoid blocking
+        if asyncio.iscoroutinefunction(compute_func):
+            result = await compute_func()
+        else:
+            result = compute_func()
+        
+        # Store result
+        async with self._lock:
+            self._cache[key] = result
+            self._timestamps[key] = time.time()
+        
+        return result
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get cache performance statistics"""
+        total = self._hits + self._misses
+        hit_rate = self._hits / total if total > 0 else 0.0
+        
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": hit_rate,
+            "cached_items": len(self._cache),
+            "total_size_bytes": sum(sys.getsizeof(v) for v in self._cache.values())
+        }
+    
+    async def clear(self):
+        """Clear cache"""
+        async with self._lock:
+            self._cache.clear()
+            self._timestamps.clear()
+2.3 Performance Optimizer Implementation
+python# cognitive_modules/performance_optimizer.py
+import json
+from pathlib import Path
+from typing import Dict, Any, List
+from ..models.enums import RecoveryMode
+
+class PerformanceOptimizer:
+    """Dynamic performance optimization system"""
+    
+    def __init__(self):
+        self.cycle_history: List[Dict[str, float]] = []
+        self.max_history = 100
+        self.optimization_thresholds = {
+            "perception": 0.05,
+            "attention": 0.03,
+            "workspace": 0.04,
+            "planning": 0.10,
+            "execution": 0.05
+        }
+        self.config_changes: Dict[str, Any] = {}
+    
+    async def optimize_cycle(self, cycle_profile: Dict[str, float]) -> Dict[str, Any]:
+        """Analyze performance and suggest optimizations"""
+        self.cycle_history.append(cycle_profile.copy())
+        if len(self.cycle_history) > self.max_history:
+            self.cycle_history.pop(0)
+        
+        optimizations = {
+            "adjustments": {},
+            "bottlenecks": [],
+            "overall_health": self._assess_health(),
+            "recovery_needed": None
+        }
+        
+        # Identify bottlenecks
+        for component, duration in cycle_profile.items():
+            threshold = self.optimization_thresholds.get(component, 0.05)
+            if duration > threshold:
+                optimizations["bottlenecks"].append({
+                    "component": component,
+                    "duration": duration,
+                    "threshold": threshold,
+                    "severity": duration / threshold
+                })
+        
+        # Generate adjustments
+        if optimizations["bottlenecks"]:
+            optimizations["adjustments"] = self._generate_adjustments(
+                optimizations["bottlenecks"]
+            )
+        
+        # Check if recovery needed
+        if self._check_health_critical():
+            optimizations["recovery_needed"] = self._suggest_recovery_mode()
+        
+        return optimizations
+    
+    def _assess_health(self) -> float:
+        """Assess overall cycle health (0.0 to 1.0)"""
+        if not self.cycle_history:
+            return 1.0
+        
+        recent_cycles = self.cycle_history[-10:]
+        total_times = [sum(cycle.values()) for cycle in recent_cycles]
+        avg_total = sum(total_times) / len(total_times)
+        
+        target_cycle = 0.1  # 100ms target
+        health = max(0.0, min(1.0, target_cycle / avg_total))
+        return health
+    
+    def _check_health_critical(self) -> bool:
+        """Check if health is critically low"""
+        return self._assess_health() < 0.3
+    
+    def _suggest_recovery_mode(self) -> RecoveryMode:
+        """Suggest appropriate recovery mode"""
+        health = self._assess_health()
+        
+        if health < 0.1:
+            return RecoveryMode.HARD_RESET
+        elif health < 0.2:
+            return RecoveryMode.MEDIUM_RESET
+        else:
+            return RecoveryMode.SOFT_RESET
+    
+    def _generate_adjustments(self, bottlenecks: List[Dict]) -> Dict[str, Any]:
+        """Generate specific optimization suggestions"""
+        adjustments = {}
+        
+        for bottleneck in bottlenecks:
+            component = bottleneck["component"]
+            severity = bottleneck["severity"]
+            
+            if component == "planning":
+                if severity > 2.0:
+                    adjustments[component] = {
+                        "max_depth": 5,
+                        "enable_caching": True,
+                        "simplify_preconditions": True
+                    }
+                else:
+                    adjustments[component] = {
+                        "max_depth": 8,
+                        "enable_caching": True
+                    }
+            
+            elif component == "attention":
+                adjustments[component] = {
+                    "max_candidates": 20 if severity > 1.5 else 30,
+                    "increase_threshold": 0.1 * severity,
+                    "simplify_weights": True
+                }
+            
+            # Apply adjustments
+            self._apply_adjustments(adjustments)
+        
+        return adjustments
+    
+    def _apply_adjustments(self, adjustments: Dict[str, Any]):
+        """Apply performance adjustments to configuration"""
+        for component, changes in adjustments.items():
+            if component not in self.config_changes:
+                self.config_changes[component] = {}
+            self.config_changes[component].update(changes)
+        
+        # Persist changes
+        self._persist_changes()
+    
+    def _persist_changes(self):
+        """Save configuration changes to disk"""
+        config_file = Path.home() / ".oscar_c" / "perf_adjustments.json"
+        config_file.parent.mkdir(exist_ok=True)
+        
+        with open(config_file, "w") as f:
+            json.dump(self.config_changes, f, indent=2)
+Phase 3: Agent Controller & Migration (~3 days)
+3.1 Migration Scripts
+python# oscar_c/migrations/v1_to_v2.py
+"""Migrate Phase 1 data model to Phase 2"""
+
+import json
+import time
+from pathlib import Path
+from typing import Dict, Any
+from oscar_c.models.datatypes import Predicate, Goal, create_goal_from_descriptor
+
+class V1ToV2Migrator:
+    """Handles Phase 1 to Phase 2 data migration"""
+    
+    def __init__(self, v1_backup_path: str = "data/phase1_backup.json"):
+        self.backup_path = Path(v1_backup_path)
+        self.migration_log = []
+    
+    def migrate_blackboard(self, blackboard: Dict[str, Any]) -> Dict[str, Any]:
+        """Migrate Phase 1 blackboard to KB predicates"""
+        predicates = []
+        migration_stats = {
+            "goals_migrated": 0,
+            "actions_migrated": 0,
+            "paths_migrated": 0,
+            "narrative_entries": 0
+        }
+        
+        # Migrate current goal
+        if "current_goal" in blackboard:
+            goal_desc = blackboard["current_goal"]
+            goal_id = self._migrate_goal_descriptor(goal_desc)
+            predicates.append({
+                "name": "hasProperty",
+                "args": ("agent", "initialGoalDesc", goal_desc),
+                "value": True,
+                "timestamp": time.time()
+            })
+            migration_stats["goals_migrated"] += 1
+        
+        # Migrate path knowledge
+        if "self_model" in blackboard and "knowledge" in blackboard["self_model"]:
+            paths = blackboard["self_model"]["knowledge"]
+            for path_type, path_data in paths.items():
+                if path_type == "validated_paths":
+                    for path in path_data:
+                        predicates.append({
+                            "name": "hasProperty",
+                            "args": ("path", path, "isValid"),
+                            "value": True,
+                            "timestamp": time.time()
+                        })
+                        migration_stats["paths_migrated"] += 1
+                elif path_type == "invalid_paths":
+                    for path in path_data:
+                        predicates.append({
+                            "name": "hasProperty",
+                            "args": ("path", path, "isInvalid"),
+                            "value": True,
+                            "timestamp": time.time()
+                        })
+                        migration_stats["paths_migrated"] += 1
+        
+        # Migrate action history
+        if "recent_actions" in blackboard:
+            for action in blackboard["recent_actions"][-20:]:  # Limit to recent 20
+                action_type = action.get("type", "UNKNOWN")
+                outcome = action.get("outcome", "unknown")
+                timestamp = action.get("timestamp", time.time())
+                
+                predicates.append({
+                    "name": "eventOccurred",
+                    "args": ("actionExecution", action_type, outcome),
+                    "value": True,
+                    "timestamp": timestamp
+                })
+                migration_stats["actions_migrated"] += 1
+        
+        # Migrate narrative entries
+        if "narrative" in blackboard:
+            for entry in blackboard["narrative"]:
+                if isinstance(entry, dict) and "content" in entry:
+                    predicates.append({
+                        "name": "eventOccurred",
+                        "args": ("narrativeEntry", entry["content"][:100], "stored"),
+                        "value": True,
+                        "timestamp": entry.get("timestamp", time.time())
+                    })
+                    migration_stats["narrative_entries"] += 1
+        
+        self.migration_log.append(migration_stats)
+        return {
+            "predicates": predicates,
+            "statistics": migration_stats
+        }
+    
+    def _migrate_goal_descriptor(self, goal_desc: str) -> str:
+        """Convert goal description to Goal object ID"""
+        goal = create_goal_from_descriptor(goal_desc)
+        return goal.id
+    
+    def save_backup(self, data: Dict[str, Any]):
+        """Save Phase 1 data backup"""
+        self.backup_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.backup_path, "w") as f:
+            json.dump(data, f, indent=2)
+    
+    def verify_migration(self, original: Dict[str, Any], migrated: Dict[str, Any]) -> bool:
+        """Verify migration integrity"""
+        # Basic counts check
+        original_goal_count = 1 if "current_goal" in original else 0
+        migrated_goal_count = migrated["statistics"]["goals_migrated"]
+        
+        if original_goal_count != migrated_goal_count:
+            return False
+        
+        # Verify action count approximation
+        original_actions = len(original.get("recent_actions", []))
+        migrated_actions = migrated["statistics"]["actions_migrated"]
+        
+        if abs(original_actions - migrated_actions) > 5:  # Allow small discrepancy
+            return False
+        
+        return True
+
+def run_migration():
+    """Execute migration process"""
+    from oscar_c.agent_controller import AgentController
+    
+    # Load Phase 1 blackboard
+    phase1_data_path = Path("data/phase1_blackboard.json")
+    if not phase1_data_path.exists():
+        print("RetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.NDContinueEditError: Phase 1 data file not found")
+return False
+with open(phase1_data_path) as f:
+    blackboard = json.load(f)
+
+# Create migrator and backup
+migrator = V1ToV2Migrator()
+migrator.save_backup(blackboard)
+
+# Perform migration
+migration_result = migrator.migrate_blackboard(blackboard)
+
+# Verify migration
+if not migrator.verify_migration(blackboard, migration_result):
+    print("❌ Migration verification failed")
+    return False
+
+# Load into KB
+from oscar_c.cognitive_modules.knowledge_base import KnowledgeBase
+kb = KnowledgeBase()
+
+for pred_data in migration_result["predicates"]:
+    predicate = Predicate(
+        name=pred_data["name"],
+        args=tuple(pred_data["args"]),
+        value=pred_data["value"],
+        timestamp=pred_data["timestamp"]
+    )
+    await kb.assert_fact(predicate)
+
+print("✅ Migration successful!")
+print(f"Statistics: {migration_result['statistics']}")
+return True
+if name == "main":
+import asyncio
+asyncio.run(run_migration())
+
+### 3.2 Agent Controller with 12-Step Cognitive Cycle
+```python
+# agent_controller.py
+import asyncio
+import logging
+import time
+from typing import Dict, Any, Optional, List
+from pathlib import Path
+
+from .models.enums import ConsciousState, GoalStatus
+from .models.datatypes import Goal, Predicate, PhenomenalState
+from .protocols import CognitiveComponent
+
+logger = logging.getLogger(__name__)
+
+class AgentController:
+    """OSCAR-C core controller implementing 12-step cognitive cycle"""
+    
+    def __init__(self, ui_queue=None, model_name: str = "test_model"):
+        self.ui_queue = ui_queue
+        self.model_name = model_name
+        
+        # Core state
+        self.components: Dict[str, CognitiveComponent] = {}
+        self.active_goals: List[Goal] = []
+        self.current_plan: Optional[List[Dict]] = None
+        self.current_experience: Optional[PhenomenalState] = None
+        self.consciousness_level: ConsciousState = ConsciousState.PRE_CONSCIOUS
+        self._prev_consciousness_level: ConsciousState = ConsciousState.UNCONSCIOUS
+        
+        # Control flags
+        self._is_running = False
+        self._loop_task: Optional[asyncio.Task] = None
+        
+        # Profiling
+        self.profiler = CycleProfiler()
+        
+        # Initialize components
+        self._initialize_components()
+    
+    def _initialize_components(self):
+        """Initialize all OSCAR-C components in proper order"""
+        from .cognitive_modules import (
+            KnowledgeBase, CognitiveCache, HTNPlanner, GlobalWorkspaceManager,
+            AttentionController, ExperienceStream, PredictiveWorldModel,
+            DynamicSelfModel, EmergentMotivationSystem, MetaCognitiveMonitor,
+            LoopDetector, ConsciousnessLevelAssessor, ErrorRecoverySystem,
+            PerformanceOptimizer, NarrativeConstructor
+        )
+        
+        # Create components in dependency order
+        self.components = {
+            "knowledge_base": KnowledgeBase(),
+            "cache": CognitiveCache(ttl=1.0),
+            "planner": HTNPlanner(),
+            "global_workspace": GlobalWorkspaceManager(capacity=7),
+            "attention_controller": AttentionController(),
+            "experience_stream": ExperienceStream(),
+            "predictive_model": PredictiveWorldModel(),
+            "dynamic_self_model": DynamicSelfModel(),
+            "motivation_engine": EmergentMotivationSystem(),
+            "meta_cognition": MetaCognitiveMonitor(),
+            "loop_detector": LoopDetector(window_size=5, max_same_actions=3),
+            "consciousness_assessor": ConsciousnessLevelAssessor(),
+            "error_recovery": ErrorRecoverySystem(),
+            "performance_optimizer": PerformanceOptimizer(),
+            "narrative_constructor": NarrativeConstructor()
+        }
+        
+        # Set up convenient references
+        for name, component in self.components.items():
+            setattr(self, name, component)
+        
+        # Configure planner context manager
+        self.planner.context_manager = PlanningContextManager()
+    
+    async def start(self):
+        """Start the agent main loop"""
+        if self._is_running:
+            logger.warning("Agent already running")
+            return
+        
+        # Initialize all components
+        for name, component in self.components.items():
+            try:
+                success = await component.initialize({}, self)
+                if not success:
+                    raise Exception(f"Component {name} initialization failed")
+            except Exception as e:
+                logger.error(f"Failed to initialize {name}: {e}")
+                raise
+        
+        # Start main loop
+        self._is_running = True
+        self._loop_task = asyncio.create_task(self._run_agent_loop())
+        
+        # Write PID file for kill switch
+        pid_file = Path("/tmp/oscar_c.pid")
+        with open(pid_file, "w") as f:
+            f.write(str(os.getpid()))
+    
+    async def stop(self):
+        """Stop the agent gracefully"""
+        self._is_running = False
+        if self._loop_task:
+            self._loop_task.cancel()
+            try:
+                await self._loop_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Cleanup
+        pid_file = Path("/tmp/oscar_c.pid")
+        if pid_file.exists():
+            pid_file.unlink()
+    
+    async def _run_agent_loop(self):
+        """Main 12-step cognitive cycle"""
+        cycle_count = 0
+        
+        while self._is_running:
+            cycle_start = time.monotonic()
+            cycle_count += 1
+            
+            try:
+                # 1. Perception & Prediction
+                self.profiler.start_section("perception")
+                raw_percepts = await self._oscar_perceive()
+                self.profiler.end_section()
+                
+                self.profiler.start_section("prediction")
+                predicted_action = self._oscar_get_predicted_next_action()
+                predictions = await self.predictive_model.predict_next_state(
+                    {"action": predicted_action}
+                )
+                self.profiler.end_section()
+                
+                # 2. Attention Allocation
+                self.profiler.start_section("attention")
+                candidates = self._oscar_gather_attention_candidates(raw_percepts)
+                attention_weights = await self.attention_controller.allocate_attention(
+                    candidates
+                )
+                self.profiler.end_section()
+                
+                # 3. Global Workspace Competition
+                self.profiler.start_section("workspace")
+                workspace_content = await self._oscar_run_workspace_competition(
+                    attention_weights, candidates
+                )
+                self.profiler.end_section()
+                
+                # 4. Experience Integration
+                self.profiler.start_section("experience_integration")
+                self.current_experience = await self.experience_stream.integrate_experience(
+                    raw_percepts,
+                    await self._oscar_get_relevant_memories(workspace_content),
+                    self._oscar_get_current_action_context()
+                )
+                self.profiler.end_section()
+                
+                # 5. Consciousness Assessment
+                self.profiler.start_section("consciousness_assessment")
+                self._prev_consciousness_level = self.consciousness_level
+                self.consciousness_level = self.consciousness_assessor.assess_consciousness_level(
+                    self.current_experience, workspace_content
+                )
+                self.profiler.end_section()
+                
+                # 6. Meta-Cognitive Monitoring
+                self.profiler.start_section("meta_cognition")
+                cognitive_state = self._oscar_get_cognitive_state()
+                perf_metrics = self._oscar_get_performance_metrics()
+                meta_state = await self.meta_cognition.monitor_cognition(
+                    cognitive_state, perf_metrics
+                )
+                self.profiler.end_section()
+                
+                # 7. Loop Detection & Intervention
+                self.profiler.start_section("loop_detection")
+                loop_info = await self.loop_detector.detect_loops(self.knowledge_base)
+                if loop_info:
+                    logger.warning(f"Loop detected: {loop_info}")
+                    await self._oscar_handle_loop(loop_info, meta_state)
+                    continue  # Skip to next cycle
+                self.profiler.end_section()
+                
+                # 8. Planning & Goal Management
+                self.profiler.start_section("planning")
+                active_goal = self._oscar_get_active_goal()
+                if not active_goal:
+                    active_goal = await self._oscar_generate_or_select_goal()
+                    self.active_goals.append(active_goal)
+                
+                if active_goal and self.consciousness_level >= ConsciousState.CONSCIOUS:
+                    self.current_plan = await self.planner.plan(active_goal, self.knowledge_base)
+                self.profiler.end_section()
+                
+                # 9. Action Selection & Execution
+                self.profiler.start_section("action_selection")
+                next_action = self._oscar_select_from_plan(self.current_plan)
+                self.profiler.end_section()
+                
+                self.profiler.start_section("execution")
+                action_result = await self._oscar_execute_action(next_action)
+                self.profiler.end_section()
+                
+                # 10. Model Updates
+                self.profiler.start_section("model_updates")
+                await self.predictive_model.update_model(predictions, action_result)
+                await self.dynamic_self_model.update_self_model(
+                    next_action["type"], action_result["outcome"], predictions
+                )
+                new_drives = await self.motivation_engine.evaluate_intrinsic_motivation(
+                    cognitive_state, action_result
+                )
+                self.profiler.end_section()
+                
+                # 11. Narrative Update
+                self.profiler.start_section("narrative")
+                if self._oscar_is_significant(self.current_experience, action_result):
+                    await self.narrative_constructor.update_narrative(
+                        self.current_experience, action_result,
+                        self.consciousness_level, new_drives
+                    )
+                self.profiler.end_section()
+                
+                # 12. Performance Optimization
+                self.profiler.start_section("optimization")
+                cycle_profile = self.profiler.get_cycle_profile()
+                optimization_hints = await self.performance_optimizer.optimize_cycle(
+                    cycle_profile
+                )
+                if optimization_hints.get("recovery_needed"):
+                    await self._handle_performance_degradation(optimization_hints)
+                self.profiler.end_section()
+                
+                # Cycle timing control
+                elapsed = time.monotonic() - cycle_start
+                target_cycle_time = 0.1  # 100ms
+                if elapsed > target_cycle_time:
+                    logger.warning(f"Cycle {cycle_count} overran: {elapsed:.3f}s")
+                
+                # Sleep remainder
+                sleep_time = max(0, target_cycle_time - elapsed)
+                await asyncio.sleep(sleep_time)
+                
+            except asyncio.CancelledError:
+                logger.info("Agent loop cancelled")
+                break
+            except Exception as e:
+                logger.exception(f"Error in cognitive cycle: {e}")
+                try:
+                    await self.error_recovery.handle_error(e, cognitive_state)
+                except Exception as recovery_error:
+                    logger.error(f"Error recovery failed: {recovery_error}")
+                await asyncio.sleep(1.0)  # Error recovery delay
+    
+    # Helper methods for cognitive cycle
+    async def _oscar_perceive(self) -> Dict[str, Any]:
+        """Perceive environment state"""
+        return {
+            "timestamp": time.time(),
+            "system_state": {
+                "cpu_percent": psutil.cpu_percent(),
+                "memory_percent": psutil.virtual_memory().percent
+            },
+            "user_input": None,  # Implementation dependent
+            "error_state": await self._check_error_state()
+        }
+    
+    def _oscar_gather_attention_candidates(self, percepts: Dict[str, Any]) -> Dict[str, Any]:
+        """Gather candidates for attention allocation"""
+        candidates = {}
+        
+        # Add percepts
+        for key, value in percepts.items():
+            if value is not None:
+                candidates[f"percept_{key}"] = {
+                    "content": value,
+                    "weight_hint": 0.5,
+                    "timestamp": time.time()
+                }
+        
+        # Add active goals
+        for idx, goal in enumerate(self.active_goals):
+            candidates[f"goal_{idx}"] = {
+                "content": goal.description,
+                "weight_hint": goal.priority,
+                "timestamp": goal.creation_time
+            }
+        
+        # Add recent experiences
+        if hasattr(self, 'experience_stream'):
+            recent_exp = self.experience_stream.stream_buffer[-3:]
+            for idx, exp in enumerate(recent_exp):
+                candidates[f"experience_{idx}"] = {
+                    "content": exp.content,
+                    "weight_hint": exp.intensity,
+                    "timestamp": exp.timestamp
+                }
+        
+        return candidates
+    
+    async def _oscar_handle_loop(self, loop_info: Dict[str, Any], meta_state: Dict[str, Any]):
+        """Handle detected behavioral loop"""
+        logger.warning(f"Loop intervention triggered: {loop_info}")
+        
+        # Analyze looping action
+        loop_action = loop_info.get("action")
+        
+        # Generate alternatives
+        alternatives = []
+        if loop_action == "READ_FILE":
+            alternatives = [
+                "switch_to_exploration",
+                "query_memory_for_context",  
+                "set_higher_level_goal"
+            ]
+        elif loop_action == "EXPLORE":
+            alternatives = [
+                "examine_specific_file",
+                "analyze_directory_structure",
+                "switch_to_memory_query"
+            ]
+        
+        # Create intervention goal
+        best_alternative = alternatives[0] if alternatives else "reset_strategy"
+        intervention_goal = Goal(
+            id=str(uuid.uuid4()),
+            description=f"break_loop_via_{best_alternative}",
+            priority=1.0,
+            success_criteria={Predicate("isState", ("loop", "resolved"))}
+        )
+        
+        # Replace current goals
+        self.active_goals = [intervention_goal]
+        self.current_plan = None  # Force replanning
+        
+        # Update narrative
+        await self.narrative_constructor.add_intervention_event(
+            loop_info=loop_info,
+            intervention=best_alternative,
+            meta_state=meta_state
+        )
+    
+    async def _check_error_state(self) -> Dict[str, Any]:
+        """Check for system error states"""
+        error_state = {
+            "has_error": False,
+            "error_type": None,
+            "severity": 0.0
+        }
+        
+        # Check for performance issues
+        health = self.performance_optimizer._assess_health()
+        if health < 0.5:
+            error_state.update({
+                "has_error": True,
+                "error_type": "performance_degradation",
+                "severity": 1.0 - health
+            })
+        
+        return error_state
+    
+    def _oscar_get_predicted_next_action(self) -> str:
+        """Get predicted next action for planning"""
+        if self.current_plan:
+            return self.current_plan[0].get("type", "THINKING")
+        elif self.active_goals:
+            goal_desc = self.active_goals[0].description.lower()
+            if "explore" in goal_desc:
+                return "EXPLORE"
+            elif "read" in goal_desc:
+                return "READ_FILE"
+        return "THINKING"
+    
+    def _oscar_get_active_goal(self) -> Optional[Goal]:
+        """Get highest priority active goal"""
+        active = [g for g in self.active_goals if g.status == GoalStatus.ACTIVE]
+        return max(active, key=lambda g: g.priority) if active else None
+3.3 Cycle Profiler Implementation
+pythonclass CycleProfiler:
+    """Performance profiling for cognitive cycle sections"""
+    
+    def __init__(self):
+        self.profile_data: Dict[str, List[float]] = {}
+        self.current_section: Optional[str] = None
+        self.section_start: Optional[float] = None
+        self.max_samples = 100
+    
+    def start_section(self, section_name: str):
+        """Start profiling a section"""
+        if self.current_section:
+            self.end_section()
+        
+        self.current_section = section_name
+        self.section_start = time.monotonic()
+    
+    def end_section(self):
+        """End profiling current section"""
+        if self.current_section and self.section_start:
+            duration = time.monotonic() - self.section_start
+            
+            if self.current_section not in self.profile_data:
+                self.profile_data[self.current_section] = []
+            
+            self.profile_data[self.current_section].append(duration)
+            
+            # Limit sample size
+            if len(self.profile_data[self.current_section]) > self.max_samples:
+                self.profile_data[self.current_section].pop(0)
+        
+        self.current_section = None
+        self.section_start = None
+    
+    def get_cycle_profile(self) -> Dict[str, float]:
+        """Get average durations for each section"""
+        return {
+            section: sum(times) / len(times) if times else 0.0
+            for section, times in self.profile_data.items()
+        }
+Phase 4: Testing Framework (~1 day)
+4.1 Comprehensive Integration Tests
+python# tests/integration/test_cognitive_cycle.py
+"""Integration tests for OSCAR-C cognitive cycle"""
+
+import pytest
+import asyncio
+import json
+from pathlib import Path
+from oscar_c.agent_controller import AgentController
+from oscar_c.models.datatypes import Predicate, create_goal_from_descriptor
+
+async def run_test_scenario(scenario_name: str, test_func):
+    """Run a test scenario with proper setup/teardown"""
+    agent = AgentController(None, "test_model")
+    
+    try:
+        await agent.start()
+        success = await test_func(agent)
+        return success
+    finally:
+        await agent.stop()
+
+@pytest.mark.asyncio
+async def test_file_read_loop_detection():
+    """Test detection of file reading loop"""
+    
+    async def test_logic(agent):
+        # Simulate reading same file repeatedly
+        for i in range(6):
+            action = {"type": "READ_FILE", "params": {"path": "test.txt"}}
+            result = {"outcome": "success" if i % 2 == 0 else "failure"}
+            
+            # Record action
+            await agent.knowledge_base.assert_fact(
+                Predicate("eventOccurred", ("actionExecution", "READ_FILE", "test.txt"))
+            )
+            
+            # Allow cycle to process
+            await asyncio.sleep(0.1)
+        
+        # Check if loop was detected
+        loop_detected = False
+        for i in range(10):  # Wait for detection
+            if hasattr(agent, '_loop_intervention_triggered'):
+                loop_detected = True
+                break
+            await asyncio.sleep(0.1)
+        
+        return loop_detected
+    
+    success = await run_test_scenario("file_read_loop", test_logic)
+    assert success, "File read loop not detected"
+
+@pytest.mark.asyncio
+async def test_goal_hierarchy_execution():
+    """Test hierarchical goal decomposition and execution"""
+    
+    async def test_logic(agent):
+        # Create hierarchical goal
+        main_goal = create_goal_from_descriptor("analyze_directory_structure")
+        agent.active_goals.append(main_goal)
+        
+        # Run several cycles
+        completed_tasks = []
+        for i in range(20):
+            # Let cycle run
+            await asyncio.sleep(0.1)
+            
+            # Check for completed actions
+            actions = await agent.knowledge_base.query("eventOccurred", None)
+            for action in actions:
+                if action.args[0] == "actionExecution":
+                    completed_tasks.append(action.args[1])
+        
+        # Verify goal decomposition occurred
+        has_list_action = any("LIST_FILES" in task for task in completed_tasks)
+        has_read_action = any("READ_FILE" in task for task in completed_tasks)
+        
+        return has_list_action and has_read_action
+    
+    success = await run_test_scenario("goal_hierarchy", test_logic)
+    assert success, "Goal hierarchy execution failed"
+
+@pytest.mark.asyncio
+async def test_consciousness_level_transitions():
+    """Test transitions between consciousness states"""
+    
+    async def test_logic(agent):
+        consciousness_states = []
+        
+        # Monitor consciousness levels over multiple cycles
+        for i in range(30):
+            await asyncio.sleep(0.1)
+            consciousness_states.append(agent.consciousness_level)
+        
+        # Check for transitions
+        unique_states = set(consciousness_states)
+        has_transitions = len(unique_states) > 1
+        
+        # Check reasonable consciousness levels
+        reasonable_levels = all(
+            state in [ConsciousState.PRE_CONSCIOUS, ConsciousState.CONSCIOUS]
+            for state in consciousness_states
+        )
+        
+        return has_transitions and reasonable_levels
+    
+    success = await run_test_scenario("consciousness_transitions", test_logic)
+    assert success, "Consciousness level transitions not observed"
+
+@pytest.mark.asyncio
+async def test_error_recovery_chain():
+    """Test error recovery mechanisms"""
+    
+    async def test_logic(agent):
+        # Simulate multiple errors
+        errors = [
+            Exception("Test error 1"),
+            MemoryError("Out of memory"),
+            RuntimeError("Planning failure")
+        ]
+        
+        recovery_attempts = 0
+        for error in errors:
+            try:
+                # Simulate error in cognitive state
+                await agent.error_recovery.handle_error(error, {})
+                recovery_attempts += 1
+            except Exception as e:
+                print(f"Recovery failed: {e}")
+        
+        # Check if appropriate recovery modes were triggered
+        recovery_modes = []
+        if hasattr(agent.error_recovery, '_recovery_history'):
+            recovery_modes = agent.error_recovery._recovery_history
+        
+        return recovery_attempts == len(errors) and len(recovery_modes) > 0
+    
+    success = await run_test_scenario("error_recovery", test_logic)
+    assert success, "Error recovery chain failed"
+4.2 Migration Testing
+python# tests/integration/test_migration.py
+"""Test Phase 1 to Phase 2 migration"""
+
+import pytest
+import json
+from pathlib import Path
+from oscar_c.migrations.v1_to_v2 import V1ToV2Migrator, run_migration
+
+def test_migration_compatibility():
+    """Test full migration pipeline"""
+    # Create mock Phase 1 data
+    mock_phase1_data = {
+        "current_goal": "Explore system and learn",
+        "recent_actions": [
+            {
+                "type": "READ_FILE",
+                "outcome": "success",
+                "timestamp": 1699000000
+            },
+            {
+                "type": "EXPLORE",
+                "outcome": "failure",
+                "error": "Directory not found"
+            }
+        ],
+        "self_model": {
+            "knowledge": {
+                "validated_paths": ["/home/user", "/tmp"],
+                "invalid_paths": ["/nonexistent"]
+            }
+        },
+        "narrative": [
+            {
+                "content": "I explored the filesystem",
+                "timestamp": 1699000100
+            }
+        ]
+    }
+    
+    # Save mock data
+    test_data_path = Path("data/test_phase1_blackboard.json")
+    test_data_path.parent.mkdir(exist_ok=True)
+    with open(test_data_path, "w") as f:
+        json.dump(mock_phase1_data, f)
+    
+    # Run migration
+    migrator = V1ToV2Migrator("data/test_phase1_backup.json")
+    result = migrator.migrate_blackboard(mock_phase1_data)
+    
+    # Verify migration
+    assert "predicates" in result
+    assert "statistics" in result
+    assert result["statistics"]["goals_migrated"] == 1
+    assert result["statistics"]["actions_migrated"] == 2
+    assert result["statistics"]["paths_migrated"] == 3
+    assert result["statistics"]["narrative_entries"] == 1
+    
+    # Verify predicate structure
+    predicates = result["predicates"]
+    assert any(p["name"] == "hasProperty" and "initialGoalDesc" in p["args"] for p in predicates)
+    assert any(p["name"] == "eventOccurred" and p["args"][0] == "actionExecution" for p in predicates)
+    
+    # Cleanup
+    test_data_path.unlink()
+Phase 5: Runtime Safety & Optimization (~1 day)
+5.1 Error Recovery System
+python# cognitive_modules/error_recovery.py
+import logging
+import time
+from typing import Dict, Any, List, Optional
+from ..models.enums import RecoveryMode
+from ..protocols import CognitiveComponent
+
+logger = logging.getLogger(__name__)
+
+class ErrorRecoverySystem(CognitiveComponent):
+    """Handles system errors and recovery procedures"""
+    
+    def __init__(self):
+        self.error_history: List[Dict[str, Any]] = []
+        self.max_history = 100
+        self.recovery_strategies = {
+            MemoryError: self._handle_memory_error,
+            TimeoutError: self._handle_timeout_error,
+            Exception: self._handle_generic_error
+        }
+        self._controller = None
+    
+    async def initialize(self, config: Dict[str, Any], controller: Any) -> bool:
+        """Initialize with controller reference"""
+        self._controller = controller
+        self.max_history = config.get("max_error_history", 100)
+        return True
+    
+    async def handle_error(self, error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle system error with appropriate recovery"""
+        error_record = {
+            "timestamp": time.time(),
+            "error_type": type(error).__name__,
+            "error_msg": str(error),
+            "context": context,
+            "recovery_action": None,
+            "recovery_success": False
+        }
+        
+        # Select appropriate recovery strategy
+        recovery_func = self._get_recovery_strategy(error)
+        
+        try:
+            recovery_action = await recovery_func(error, context)
+            error_record["recovery_action"] = recovery_action
+            error_record["recovery_success"] = True
+            
+            # Apply recovery
+            await self._apply_recovery(recovery_action)
+            
+        except Exception as e:
+            logger.error(f"Recovery failed: {e}")
+            error_record["recovery_error"] = str(e)
+        
+        # Store error record
+        self.error_history.append(error_record)
+        if len(self.error_history) > self.max_history:
+            self.error_history.pop(0)
+        
+        return error_record
+    
+    def _get_recovery_strategy(self, error: Exception):
+        """Get appropriate recovery strategy for error type"""
+        for error_type, strategy in self.recovery_strategies.items():
+            if isinstance(error, error_type):
+                return strategy
+        return self.recovery_strategies[Exception]
+    
+    async def _handle_memory_error(self, error: MemoryError, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle out of memory errors"""
+        return {
+            "action": "memory_cleanup",
+            "steps": [
+                "clear_caches",
+                "trim_history",
+                "compact_knowledge_base"
+            ]
+        }
+    
+    async def _handle_timeout_error(self, error: TimeoutError, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Handle timeout errors"""
+        operation = context.get("operation", "unknown")
+        
+        if operation == "planning":
+            return {
+                "action": "reduce_planning_complexity",
+                "steps": [
+                    "lower_max_depth",
+                    "simplify_heuristics",
+                    "enable_timeout"
+                ]
+            }
+        else:
+            return {
+                "action": "extend_timeout",
+                "steps": ["increase_timeout_threshold"]
+            }
+    
+    async def _handle_generic_error(self, error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Generic error handling"""
+        error_frequency = self._check_error_frequency(type(error).__name__)
+        
+        if error_frequency > 5:  # Frequent error
+            return {
+                "action": "safe_mode",
+                "steps": ["enter_safe_mode", "log_diagnostics"]
+            }
+        else:
+            return {
+                "action": "soft_reset",
+                "steps": ["reset_current_task", "continue_operation"]
+            }
+    
+    async def _apply_recovery(self, recovery_action: Dict[str, Any]):
+        """Apply recovery action to system"""
+        action_type = recovery_action["action"]
+        
+        if action_type == "memory_cleanup":
+            await self._clear_caches()
+            await self._trim_history()
+            await self._compact_kb()
+        
+        elif action_type == "safe_mode":
+            await self._enter_safe_mode()
+        
+        elif action_type == "soft_reset":
+            await self._soft_reset()
+        
+        # Additional recovery actions...
+    
+    async def _clear_caches(self):
+        """Clear all system caches"""
+        if hasattr(self._controller, 'cache'):
+            await self._controller.cache.clear()
+        
+        # Clear component caches
+        for component in self._controller.components.values():
+            if hasattr(component, 'clear_cache'):
+                await component.clear_cache()
+    
+    async def _enter_safe_mode(self):
+        """Enter safe mode with minimal functionality"""
+        self._controller.safe_mode = True
+        
+        # Disable non-essential components
+        for name, component in self._controller.components.items():
+            if name not in ["knowledge_base", "error_recovery"]:
+                component.enabled = False
+        
+        logger.warning("SYSTEM ENTERED SAFE MODE")
+    
+    def _check_error_frequency(self, error_type: str) -> int:
+        """Check frequency of specific error type"""
+        recent_errors = self.error_history[-50:]  # Last 50 errors
+        return sum(1 for record in recent_errors 
+                  if record["error_type"] == error_type)
+5.2 Kill Switch Implementation
+python# scripts/kill_agent.py
+"""Enhanced kill switch with safety checks"""
+
+import psutil
+import sys
+import time
+import json
+from pathlib import Path
+
+def find_oscar_processes():
+    """Find all running OSCAR-C processes"""
+    oscar_procs = []
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            if any('oscar_c' in arg.lower() for arg in proc.info['cmdline'] or []):
+                oscar_procs.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            pass
+    return oscar_procs
+
+def safe_shutdown(pid: int) -> bool:
+    """Attempt safe shutdown of agent"""RetryClaude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.NDContinueEditpython# scripts/kill_agent.py (continued)
+def safe_shutdown(pid: int) -> bool:
+   """Attempt safe shutdown of agent"""
+   try:
+       process = psutil.Process(pid)
+       
+       # Send SIGINT for graceful shutdown
+       process.send_signal(signal.SIGINT)
+       
+       # Wait for process to respond
+       for i in range(10):  # 10 second timeout
+           if not process.is_running():
+               print(f"✅ Process {pid} shut down gracefully")
+               return True
+           time.sleep(1)
+           print(f"Waiting for process {pid} to shut down... ({10-i}s)")
+       
+       # Force kill if still running
+       if process.is_running():
+           print(f"⚠️ Force terminating process {pid}")
+           process.kill()
+           time.sleep(1)
+           
+           if not process.is_running():
+               print(f"✅ Process {pid} terminated")
+               return True
+           else:
+               print(f"❌ Failed to terminate process {pid}")
+               return False
+   
+   except psutil.NoSuchProcess:
+       print(f"Process {pid} already terminated")
+       return True
+   except Exception as e:
+       print(f"Error shutting down process {pid}: {e}")
+       return False
+
+def save_diagnostics():
+   """Save system state before shutdown"""
+   diag_dir = Path("diagnostics")
+   diag_dir.mkdir(exist_ok=True)
+   
+   timestamp = time.strftime("%Y%m%d_%H%M%S")
+   diag_file = diag_dir / f"shutdown_diagnostics_{timestamp}.json"
+   
+   diagnostics = {
+       "timestamp": timestamp,
+       "system_state": {
+           "cpu_percent": psutil.cpu_percent(),
+           "memory_info": dict(psutil.virtual_memory()._asdict()),
+           "disk_usage": dict(psutil.disk_usage('/')._asdict())
+       },
+       "running_processes": len(find_oscar_processes())
+   }
+   
+   with open(diag_file, "w") as f:
+       json.dump(diagnostics, f, indent=2)
+   
+   print(f"✅ Diagnostics saved to {diag_file}")
+
+def main():
+   pid_file = Path("/tmp/oscar_c.pid")
+   
+   # Save diagnostics first
+   save_diagnostics()
+   
+   if pid_file.exists():
+       try:
+           with open(pid_file) as f:
+               pid = int(f.read().strip())
+           
+           success = safe_shutdown(pid)
+           if success:
+               pid_file.unlink()
+       except Exception as e:
+           print(f"Error reading PID file: {e}")
+   
+   # Also check for any running OSCAR processes
+   remaining_procs = find_oscar_processes()
+   if remaining_procs:
+       print(f"Found {len(remaining_procs)} remaining OSCAR processes")
+       for proc in remaining_procs:
+           safe_shutdown(proc.pid)
+   
+   print("✅ Shutdown complete")
+
+if __name__ == "__main__":
+   main()
+Phase 6: Developer Dashboard (~1 day)
+6.1 WebSocket Telemetry Server
+python# oscar_c/telemetry_server.py
+"""WebSocket server for real-time agent telemetry"""
+
+import asyncio
+import json
+import websockets
+from typing import Dict, Set
+from pathlib import Path
+
+class TelemetryServer:
+    """Manages WebSocket connections for agent telemetry"""
+    
+    def __init__(self, host: str = "localhost", port: int = 8000):
+        self.host = host
+        self.port = port
+        self.connections: Dict[str, Set[websockets.WebSocketServerProtocol]] = {
+            "consciousness": set(),
+            "performance": set(),
+            "loops": set(),
+            "goals": set(),
+            "workspace": set()
+        }
+        self.agent = None
+    
+    def set_agent(self, agent):
+        """Set reference to agent controller"""
+        self.agent = agent
+    
+    async def handler(self, websocket: websockets.WebSocketServerProtocol, path: str):
+        """Handle WebSocket connection"""
+        channel = path.lstrip("/")
+        
+        if channel not in self.connections:
+            await websocket.close(1008, f"Unknown channel: {channel}")
+            return
+        
+        # Add connection to channel
+        self.connections[channel].add(websocket)
+        print(f"New connection to {channel}")
+        
+        try:
+            # Send initial state
+            if channel == "consciousness":
+                await self.send_consciousness_state(websocket)
+            elif channel == "performance":
+                await self.send_performance_metrics(websocket)
+            
+            # Keep connection alive
+            async for message in websocket:
+                # Echo back for testing
+                await websocket.send(f"Echo: {message}")
+        
+        finally:
+            self.connections[channel].remove(websocket)
+            print(f"Connection closed for {channel}")
+    
+    async def broadcast(self, channel: str, data: Dict):
+        """Broadcast data to all connections on channel"""
+        if channel not in self.connections:
+            return
+        
+        message = json.dumps(data)
+        websockets_to_remove = []
+        
+        for websocket in self.connections[channel]:
+            try:
+                await websocket.send(message)
+            except websockets.exceptions.ConnectionClosed:
+                websockets_to_remove.append(websocket)
+        
+        # Clean up closed connections
+        for websocket in websockets_to_remove:
+            self.connections[channel].remove(websocket)
+    
+    async def send_consciousness_state(self, websocket):
+        """Send current consciousness state"""
+        if not self.agent:
+            return
+        
+        state = {
+            "level": self.agent.consciousness_level.name,
+            "integration": self.agent.current_experience.integration_level if self.agent.current_experience else 0,
+            "valence": self.agent.current_experience.valence if self.agent.current_experience else 0,
+            "active_goals": [g.description for g in self.agent.active_goals],
+            "timestamp": time.time()
+        }
+        
+        await websocket.send(json.dumps(state))
+    
+    async def send_performance_metrics(self, websocket):
+        """Send performance metrics"""
+        if not self.agent or not hasattr(self.agent, 'profiler'):
+            return
+        
+        metrics = {
+            "cycle_profile": self.agent.profiler.get_cycle_profile(),
+            "health": self.agent.performance_optimizer._assess_health(),
+            "memory_usage": psutil.Process().memory_info().rss / 1024 / 1024,  # MB
+            "cpu_percent": psutil.cpu_percent(),
+            "timestamp": time.time()
+        }
+        
+        await websocket.send(json.dumps(metrics))
+    
+    async def start(self):
+        """Start WebSocket server"""
+        server = await websockets.serve(self.handler, self.host, self.port)
+        print(f"Telemetry server running on ws://{self.host}:{self.port}")
+        await server.wait_closed()
+6.2 Dashboard Integration
+jsx// web/src/components/OscarDashboard.jsx
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+
+const TELEMETRY_ENDPOINTS = {
+  consciousness: 'ws://localhost:8000/consciousness',
+  performance: 'ws://localhost:8000/performance',
+  loops: 'ws://localhost:8000/loops',
+  goals: 'ws://localhost:8000/goals',
+  workspace: 'ws://localhost:8000/workspace'
+};
+
+const OscarDashboard = () => {
+  const [consciousnessData, setConsciousnessData] = useState([]);
+  const [performanceData, setPerformanceData] = useState([]);
+  const [currentState, setCurrentState] = useState({
+    consciousnessLevel: 'PRE_CONSCIOUS',
+    integration: 0,
+    valence: 0,
+    activeGoals: [],
+    systemHealth: 1.0
+  });
+
+  useEffect(() => {
+    const sockets = {};
+    
+    // Connect to consciousness telemetry
+    sockets.consciousness = new WebSocket(TELEMETRY_ENDPOINTS.consciousness);
+    
+    sockets.consciousness.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setCurrentState(prev => ({
+        ...prev,
+        consciousnessLevel: data.level,
+        integration: data.integration,
+        valence: data.valence,
+        activeGoals: data.active_goals
+      }));
+      
+      setConsciousnessData(prev => [
+        ...prev.slice(-50), // Keep last 50 points
+        {
+          timestamp: new Date(data.timestamp * 1000).toLocaleTimeString(),
+          integration: data.integration,
+          valence: data.valence
+        }
+      ]);
+    };
+    
+    // Connect to performance telemetry
+    sockets.performance = new WebSocket(TELEMETRY_ENDPOINTS.performance);
+    
+    sockets.performance.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setCurrentState(prev => ({
+        ...prev,
+        systemHealth: data.health
+      }));
+      
+      const cycleTime = Object.values(data.cycle_profile).reduce((a, b) => a + b, 0);
+      setPerformanceData(prev => [
+        ...prev.slice(-50),
+        {
+          timestamp: new Date(data.timestamp * 1000).toLocaleTimeString(),
+          cycleTime: cycleTime * 1000, // Convert to ms
+          memoryUsage: data.memory_usage,
+          cpuUsage: data.cpu_percent
+        }
+      ]);
+    };
+    
+    // Cleanup on unmount
+    return () => {
+      Object.values(sockets).forEach(socket => socket.close());
+    };
+  }, []);
+
+  const getConsciousnessColor = (level) => {
+    const colors = {
+      'UNCONSCIOUS': '#94a3b8',
+      'PRE_CONSCIOUS': '#60a5fa',
+      'CONSCIOUS': '#22c55e',
+      'META_CONSCIOUS': '#8b5cf6',
+      'REFLECTIVE': '#f97316'
+    };
+    return colors[level] || '#64748b';
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold">OSCAR-C Control Dashboard</h1>
+          <p className="text-gray-400">Real-time agent monitoring and diagnostics</p>
+        </header>
+
+        {/* Consciousness Status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-2">Consciousness Level</h3>
+            <div 
+              className="text-3xl font-bold"
+              style={{ color: getConsciousnessColor(currentState.consciousnessLevel) }}
+            >
+              {currentState.consciousnessLevel}
+            </div>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-2">Integration Level</h3>
+            <div className="text-3xl font-bold">
+              {(currentState.integration * 100).toFixed(1)}%
+            </div>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-2">System Health</h3>
+            <div className="text-3xl font-bold">
+              {(currentState.systemHealth * 100).toFixed(1)}%
+            </div>
+          </div>
+          
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-2">Emotional Valence</h3>
+            <div className="text-3xl font-bold">
+              {currentState.valence > 0 ? '+' : ''}{currentState.valence.toFixed(2)}
+            </div>
+          </div>
+        </div>
+
+        {/* Charts */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Consciousness Metrics</h3>
+            <LineChart width={500} height={300} data={consciousnessData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="timestamp" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="integration" 
+                stroke="#22c55e" 
+                name="Integration"
+                dot={false}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="valence" 
+                stroke="#8b5cf6" 
+                name="Valence"
+                dot={false}
+              />
+            </LineChart>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Performance Metrics</h3>
+            <LineChart width={500} height={300} data={performanceData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="timestamp" stroke="#9ca3af" />
+              <YAxis stroke="#9ca3af" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151' }}
+              />
+              <Legend />
+              <Line 
+                type="monotone" 
+                dataKey="cycleTime" 
+                stroke="#3b82f6" 
+                name="Cycle Time (ms)"
+                dot={false}
+              />
+              <Line 
+                type="monotone" 
+                dataKey="memoryUsage" 
+                stroke="#f97316" 
+                name="Memory (MB)"
+                dot={false}
+              />
+            </LineChart>
+          </div>
+        </div>
+
+        {/* Active Goals */}
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h3 className="text-lg font-semibold mb-4">Active Goals</h3>
+          <div className="space-y-2">
+            {currentState.activeGoals.map((goal, index) => (
+              <div key={index} className="flex items-center bg-gray-700 rounded p-3">
+                <div className="w-2 h-2 bg-green-500 rounded-full mr-3" />
+                <div className="flex-1">
+                  <div className="font-medium">{goal}</div>
+                </div>
+              </div>
+            ))}
+            {currentState.activeGoals.length === 0 && (
+              <div className="text-gray-400 italic">No active goals</div>
+            )}
+          </div>
+        </div>
+
+        {/* System Status */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Knowledge Base Status</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Total Facts</span>
+                <span>--</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Recent Updates</span>
+                <span>--</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Planning Status</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Current Plan</span>
+                <span>--</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Planning Success Rate</span>
+                <span>--</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-lg font-semibold mb-4">Error Status</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Recent Errors</span>
+                <span>--</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-400">Recovery Success</span>
+                <span>--</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OscarDashboard;
+6.3 Dashboard Build Configuration
+javascript// web/vite.config.js
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    host: 'localhost',
+    hmr: {
+      overlay: false
+    }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: true,
+    rollupOptions: {
+      input: {
+        main: './index.html'
+      }
+    }
+  },
+  resolve: {
+    alias: {
+      '@': '/src'
+    }
+  }
+})
+json// web/package.json
+{
+  "name": "oscar-c-dashboard",
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.7.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7",
+    "@vitejs/plugin-react": "^4.0.3",
+    "eslint": "^8.45.0",
+    "eslint-plugin-react": "^7.32.2",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.3",
+    "vite": "^4.4.5"
+  }
+}
+Phase 7: Documentation & Release (~½ day)
+7.1 API Documentation with pdoc
+python# scripts/generate_docs.py
+"""Generate API documentation for OSCAR-C"""
+
+import subprocess
+import sys
+from pathlib import Path
+
+def generate_api_docs():
+    """Generate comprehensive API documentation"""
+    
+    # Ensure docs directory exists
+    docs_dir = Path("docs")
+    docs_dir.mkdir(exist_ok=True)
+    
+    # Generate API docs using pdoc
+    modules = [
+        "oscar_c",
+        "oscar_c.agent_controller",
+        "oscar_c.cognitive_modules",
+        "oscar_c.models",
+        "oscar_c.protocols"
+    ]
+    
+    for module in modules:
+        output_dir = docs_dir / module.split(".")[-1]
+        
+        cmd = [
+            sys.executable, "-m", "pdoc",
+            "--html",
+            "--force",
+            "--output-dir", str(output_dir),
+            module
+        ]
+        
+        print(f"Generating docs for {module}...")
+        subprocess.run(cmd, check=True)
+    
+    # Generate main index
+    index_content = """# OSCAR-C Documentation
+
+## Quick Links
+- [Agent Controller](agent_controller/index.html)
+- [Cognitive Modules](cognitive_modules/index.html)
+- [Data Models](models/index.html)
+- [Protocols](protocols/index.html)
+
+## Architecture Overview
+[Architecture diagram and documentation...]
+"""
+    
+    with open(docs_dir / "index.md", "w") as f:
+        f.write(index_content)
+    
+    print("✅ Documentation generated successfully")
+
+if __name__ == "__main__":
+    generate_api_docs()
+7.2 Comprehensive README
+markdown# OSCAR-C: Optimal Self-Conscious Architecture for Reasoning
+
+[![Build Status](https://github.com/your-org/oscar-c/workflows/CI/badge.svg)](https://github.com/your-org/oscar-c/actions)
+[![Coverage](https://codecov.io/gh/your-org/oscar-c/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/oscar-c)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+OSCAR-C is an advanced cognitive architecture for artificial intelligence agents, implementing consciousness-adjacent capabilities through information integration, hierarchical planning, and meta-cognitive monitoring.
+
+## 🚀 Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/your-org/oscar-c.git
+cd oscar-c
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install web dashboard dependencies
+cd web && npm install && npm run build && cd ..
+
+# Run the agent
+python -m oscar_c --run
+📊 Dashboard
+Access the real-time monitoring dashboard at http://localhost:8000/oscarc/dashboard
+🏗️ Architecture
+OSCAR-C implements a 12-step cognitive cycle with the following components:
+
+Knowledge Base: Predicate-based fact storage using SQLite
+HTN Planner: Hierarchical task decomposition
+Global Workspace: Information integration and broadcasting
+Experience Stream: Unified phenomenal state construction
+Consciousness Assessment: Integration level monitoring
+Meta-Cognitive Monitor: Pattern detection and intervention
+Performance Optimizer: Dynamic configuration tuning
+Error Recovery: Fault tolerance and safe mode
+
+🔄 Cognitive Cycle
+Perception → Prediction → Attention → Workspace → Experience →
+Consciousness → Meta-Cognition → Planning → Execution →
+Model Updates → Narrative → Optimization
+💻 Development
+Setup
+bash# Install development dependencies
+pip install -e ".[dev]"
+
+# Set up pre-commit hooks
+pre-commit install
+
+# Run tests
+pytest tests/ -v
+
+# Start development dashboard
+cd web && npm run dev
+Project Structure
+oscar_c/
+├── agent_controller.py    # Main controller implementing cognitive cycle
+├── models/               # Data structures and enums
+├── cognitive_modules/    # Component implementations
+├── protocols.py          # Component interfaces
+├── config.toml          # Configuration
+└── web/                 # Dashboard UI
+🧪 Testing
+bash# Unit tests
+pytest tests/unit -v
+
+# Integration tests
+pytest tests/integration -v
+
+# Smoke tests
+pytest tests/smoke -v
+
+# Performance tests
+pytest tests/performance -v
+📈 Performance Targets
+
+Cycle time: ≤ 100ms
+Memory usage: ≤ 512MB
+CPU utilization: ≤ 20%
+Planning depth: ≤ 10 levels
+
+🚨 Safety Features
+
+Loop detection and intervention
+Dynamic error recovery
+Safe mode fallback
+Performance monitoring
+Emergency kill switch
+
+📚 Documentation
+
+API Reference
+Architecture Guide
+Migration Guide
+Developer Guide
+
+🛣️ Roadmap
+Phase 2 (Current)
+
+✅ Core cognitive architecture
+✅ Performance monitoring
+✅ Web dashboard
+
+Phase 3 (Stretch Goals)
+
+ Φ-metric (IIT) computation
+ Multi-agent sandbox
+ Visual debugger overlay
+
+🤝 Contributing
+
+Fork the repository
+Create feature branch (git checkout -b feature/amazing-feature)
+Commit changes (git commit -m 'Add amazing feature')
+Push to branch (git push origin feature/amazing-feature)
+Open a Pull Request
+
+📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
+🙏 Acknowledgments
+
+Based on cognitive science principles and AI research
+Inspired by Global Workspace Theory and Integrated Information Theory
+Built with Python and React
+
+📞 Support
+For support, email support@oscar-c.ai or join our Slack channel.
+🔬 Research
+For academic inquiries and research collaborations, please contact research@oscar-c.ai.
+
+OSCAR-C: Pushing the boundaries of artificial consciousness through principled cognitive architecture.
+
+### 7.3 Release Script
+```python
+# scripts/release.py
+"""Release automation script for OSCAR-C"""
+
+import subprocess
+import sys
+import json
+from pathlib import Path
+from datetime import datetime
+
+def run_command(cmd, check=True, capture_output=False):
+    """Run shell command safely"""
+    result = subprocess.run(cmd, shell=True, check=check, 
+                          capture_output=capture_output, text=True)
+    if capture_output:
+        return result.stdout.strip()
+    return result
+
+def ensure_clean_repo():
+    """Ensure repository is clean before release"""
+    status = run_command("git status --porcelain", capture_output=True)
+    if status:
+        print("❌ Repository has uncommitted changes. Commit before release.")
+        sys.exit(1)
+
+def create_release(version: str):
+    """Create and tag a new release"""
+    print(f"Creating release v{version}...")
+    
+    # Ensure clean repository
+    ensure_clean_repo()
+    
+    # Update version in package files
+    update_version_files(version)
+    
+    # Generate changelog
+    generate_changelog(version)
+    
+    # Update docs
+    run_command("python scripts/generate_docs.py")
+    
+    # Create commit
+    run_command(f"git add .")
+    run_command(f"git commit -m 'Release v{version}'")
+    
+    # Create tag
+    run_command(f"git tag -a v{version} -m 'Release v{version}'")
+    
+    # Push changes
+    run_command("git push origin main --tags")
+    
+    print(f"✅ Release v{version} created successfully!")
+
+def update_version_files(version: str):
+    """Update version in configuration files"""
+    # Update VERSION.toml
+    version_file = Path("oscar_c/VERSION.toml")
+    version_data = {
+        "version": version,
+        "release_date": datetime.now().isoformat(),
+        "codename": f"Phase-2-{version}"
+    }
+    
+    with open(version_file, "w") as f:
+        import toml
+        toml.dump(version_data, f)
+    
+    # Update package.json
+    package_file = Path("web/package.json")
+    with open(package_file) as f:
+        package_data = json.load(f)
+    
+    package_data["version"] = version
+    
+    with open(package_file, "w") as f:
+        json.dump(package_data, f, indent=2)
+
+def generate_changelog(version: str):
+    """Generate CHANGELOG entry"""
+    changelog_file = Path("CHANGELOG.md")
+    
+    # Get commits since last tag
+    last_tag = run_command("git describe --tags --abbrev=0", 
+                          capture_output=True, check=False)
+    
+    if last_tag:
+        commits = run_command(f"git log {last_tag}..HEAD --oneline", 
+                             capture_output=True)
+    else:
+        commits = run_command("git log --oneline", capture_output=True)
+    
+    # Prepare changelog entry
+    changelog_entry = f"""
+## [v{version}] - {datetime.now().strftime('%Y-%m-%d')}
+
+### Changed
+{chr(10).join(f"- {commit}" for commit in commits.split(chr(10)) if commit)}
+
+"""
+    
+    # Prepend to changelog
+    if changelog_file.exists():
+        existing_content = changelog_file.read_text()
+        changelog_entry += existing_content
+    
+    changelog_file.write_text(changelog_entry)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2:
+        print("Usage: python scripts/release.py <version>")
+        print("Example: python scripts/release.py 2.0.0-alpha")
+        sys.exit(1)
+    
+    version = sys.argv[1]
+    create_release(version)
+Final Implementation Notes
+This expanded roadmap provides a complete, production-ready blueprint for implementing OSCAR-C Phase 2. Key implementation considerations:
+
+Sequential Development: Follow phases strictly - each builds on previous foundations
+Testing at Every Step: Unit, integration, and smoke tests validate each component
+Performance First: Monitor cycle times from day one to prevent performance debt
+Safety by Design: Error handling and recovery mechanisms are core, not afterthoughts
+Observable Everything: Dashboard and telemetry make system behavior transparent
+Graceful Degradation: Safe mode ensures system stability under all conditions
+Documentation as Code: API docs, architecture diagrams, and guides are automated
+
+The complete transition from Phase 1's reactive, LLM-driven architecture to Phase 2's principled cognitive system represents a significant advancement toward genuine artificial consciousness capabilities.

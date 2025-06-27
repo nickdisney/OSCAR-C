@@ -1,0 +1,96 @@
+OSCAR-C Project Documentation: cognitive_modules/meta_cognitive_monitor.py
+File Path: cognitive_modules/meta_cognitive_monitor.py
+Purpose and Role:
+The MetaCognitiveMonitor (MCM) component serves as the agent's primary mechanism for "thinking about thinking" or self-monitoring. It observes the OSCAR-C agent's overall cognitive state (including goal progress, consciousness levels, action outcomes) and performance metrics. Its main role is to detect anomalies, inefficiencies, or problematic patterns in the agent's cognitive processes, such as goal stagnation, persistent low levels of consciousness, or performance bottlenecks. Upon detecting such issues, it generates a meta_analysis output containing identified problems and, potentially, suggestions for interventions or strategic adjustments, which the AgentController or other components can then act upon.
+Theoretical Basis / Cognitive Inspiration:
+Meta-cognition: This component directly embodies the concept of meta-cognition, which involves monitoring and regulating one's own cognitive processes (Flavell, 1979; Nelson & Narens, 1990). Effective meta-cognition is crucial for adaptive learning, error correction, and higher-level reasoning.
+Self-Monitoring and Self-Regulation: The MCM provides the "monitoring" aspect. The "regulation" aspect is typically handled by the AgentController based on the MCM's output, or by other specialized components like PerformanceOptimizer or ErrorRecoverySystem.
+Anomaly Detection: From an AI perspective, the MCM performs anomaly detection on the stream of cognitive states and performance data, flagging deviations from expected or desired operational patterns.
+Architectures with Meta-level Control: Many sophisticated AI architectures include a meta-level component that reasons about the object-level reasoning processes (e.g., Cox & Raja, 2011, "Metareasoning: Thinking about thinking"). OSCAR-C's MCM serves this purpose.
+Implementation Details:
+Inheritance:
+class MetaCognitiveMonitor(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+Configuration: Loaded during initialize from the meta_cognition section of config.toml.
+stagnation_threshold_s: float: Time duration (in seconds) after which an active goal with a high failure rate is considered potentially stagnated.
+failure_rate_threshold: float: The failure rate (0-1) above which a goal's progress is considered problematic if it's also old.
+low_consciousness_threshold_s: float: Duration for which the agent's consciousness level can remain below CONSCIOUS before being flagged.
+history_size: int: The number of recent cognitive states/metrics to store for analysis (e.g., for tracking consciousness levels over time).
+(Implicitly, reflection_trigger_frequency_cycles is in config, but MCM doesn't use it directly; DynamicSelfModel does).
+State Variables:
+recent_goal_progress: Deque[Dict[str, Any]]: Stores history of active goals (not fully utilized in current logic for detailed progress tracking, but available).
+recent_consciousness_levels: Deque[Tuple[float, ConsciousState]]: Stores a history of (timestamp, ConsciousState enum member) tuples.
+_kb: Optional[KnowledgeBase]: A reference to the KnowledgeBase for querying action history related to goals.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters.
+Initializes history deques with the configured history_size.
+Requires and stores a valid reference to the KnowledgeBase instance from the controller. Logs an error if KB is not available, as this limits goal stagnation checks.
+async def monitor_cognition(self, cognitive_state: Dict[str, Any], performance_metrics: Dict[str, float]) -> Dict[str, Any];
+This is the core analysis method.
+Update History: Appends the current consciousness_level (extracted and converted from cognitive_state.consciousness_level string) to self.recent_consciousness_levels.
+Goal Stagnation Check:
+Retrieves the current active_goal from the AgentController (via self._controller._oscar_get_active_goal()).
+If an active_goal exists, is ACTIVE, and its age (current_time - creation_time) exceeds self.stagnation_threshold_s:
+Queries the KnowledgeBase (if available) for eventOccurred("actionExecution", action_type, outcome) predicates whose timestamps are after the goal's creation_time. (Currently fetches a large batch of recent facts and filters, which could be optimized).
+Calculates actual_failure_rate for actions related to this goal.
+If actual_failure_rate > self.failure_rate_threshold, an issue {"type": "goal_stagnation", ...} is added to analysis["issues_detected"].
+If no actions recorded for an old goal, it's also treated as stagnation (100% failure rate).
+Persistent Low Consciousness Check:
+If len(self.recent_consciousness_levels) is sufficient (e.g., self.history_size):
+Checks if the agent has been below ConsciousState.CONSCIOUS for a duration exceeding self.low_consciousness_threshold_s.
+If so, adds a {"type": "low_consciousness", ...} issue.
+Performance Bottleneck Check (Basic):
+Calculates avg_cycle_time from performance_metrics (or sums profile if average_cycle_time key missing).
+Compares with target_cycle_time from controller.config.
+If avg_cycle_time is significantly higher (e.g., > 1.5x target), adds a {"type": "performance_bottleneck", ...} issue.
+Output: Returns an analysis dictionary: {"timestamp": ..., "issues_detected": List[Dict], "suggestions": List[str], "confidence": float}. suggestions are currently simple strings.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Extracts cognitive_state and performance_metrics from input_state.
+Calls self.monitor_cognition.
+Returns {"meta_analysis": analysis_result}.
+async def reset(self) -> None;
+Clears recent_goal_progress and recent_consciousness_levels history.
+async def get_status(self) -> Dict[str, Any];
+Returns current configuration and last recorded consciousness level from its history.
+Algorithms Used:
+Sliding Window History: collections.deque for tracking recent consciousness levels.
+Thresholding: Compares various metrics (goal age, failure rates, duration of low consciousness, cycle times) against configured thresholds.
+Frequency/Rate Calculation: Calculates actual_failure_rate for goal stagnation by querying and processing action history from the KB.
+Relationship to Overall Project & Logic Flow:
+The MetaCognitiveMonitor is Step 6 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via input_state to process):
+cognitive_state: A dictionary aggregated by AgentController._oscar_get_cognitive_state, containing information like current consciousness_level, active goal details, plan length, workspace load, emotional valence, etc.
+performance_metrics: A dictionary of timing data for the previous cycle's sections, typically from CycleProfiler.get_average_profile().
+Implicitly uses KnowledgeBase (via self._kb) for goal-related action history.
+Implicitly accesses AgentController.config (via self._controller) for target_cycle_time.
+Output (to AgentController):
+{"meta_analysis": Dict[str, Any]}: A dictionary containing issues_detected, suggestions, and confidence.
+Downstream Consumers / Influence:
+AgentController:
+Receives meta_analysis.
+May use meta_analysis.suggestions or issues_detected to inform _oscar_handle_loop or _oscar_handle_recovery logic.
+Could potentially use meta_analysis to dynamically adjust parameters of other components (e.g., attention weights if persistently distracted, planning strategy if stagnating). This feedback loop is mostly planned rather than fully implemented in the controller based on MCM output yet.
+NarrativeConstructor (Step 11): Receives meta_analysis as part of its input and may use issues_detected as a trigger for generating a narrative entry.
+Current State of the Script:
+Functionality Implemented:
+Basic checks for goal stagnation (using KB queries for action failure rates), persistent low consciousness, and performance bottlenecks are implemented.
+History tracking for consciousness levels.
+Configuration of thresholds and history size.
+KB integration for fetching action history for goal stagnation analysis.
+Alignment with Plans:
+Implements the "Functional Goal Stagnation Check" from Phase I of the development checklist by querying KB for action success/failure related to the active goal and calculating actual_failure_rate.
+Provides the foundational structure for more advanced meta-cognitive analysis planned for later phases.
+Known Limitations/Placeholders:
+KB Query for Stagnation: The current method of fetching a large batch of recent_facts and then filtering them by timestamp for a specific goal's action history can be inefficient if the KB is very large or the goal is very old. A more targeted KB query would be better.
+Suggestion Generation: The suggestions provided in the meta_analysis are currently simple strings (e.g., "review_goal_viability"). They are not yet highly specific or actionable commands for the AgentController.
+Integration with DSM: The plans mention integrating analysis of DynamicSelfModel confidence scores (e.g., flag if consistently trying actions with low self-assessed capability). This is not yet implemented.
+Analysis of Narrative Predicates: The plan to analyze NarrativeConstructor predicates from KB (e.g., detect recurring negative emotional themes) is not yet implemented.
+Pattern Recognition: The "patterns_recognized" field mentioned in some plans for meta_analysis is not currently populated by monitor_cognition.
+Suggestions for Future Development/Refinement:
+Optimize KB Queries for Stagnation: Enhance KnowledgeBase or MCM's querying logic to more efficiently retrieve action outcomes specifically related to a given goal.id and within its lifetime.
+More Actionable Suggestions: Refine suggestions to be more structured and directly consumable by the AgentController or other components (e.g., instead of a string, a dictionary like {"action": "REPLAN", "params": {"goal_id": "...", "strategy": "alternative_methods"}}).
+Integrate DynamicSelfModel Analysis (Phase III): Query DSM for capability confidence related to actions in the current plan or recently failed actions. Flag situations where the agent persists with low-confidence actions or fails due to known limitations.
+Analyze Narrative Predicates (Phase III): Once NarrativeConstructor stores predicates in KB, implement logic in MCM to query these and detect emotional trends or recurring themes in the agent's experience.
+Advanced Pattern Detection: Implement algorithms to detect more complex patterns in behavior or cognitive states beyond simple thresholds (e.g., recognizing cycles of high effort followed by low consciousness, or specific sequences of actions that consistently lead to failure for certain goal types).
+Learning and Adaptation of Thresholds: Allow the MCM's internal thresholds (e.g., stagnation_threshold_s) to be learned or adapted over time based on the agent's overall success and the effectiveness of past interventions.

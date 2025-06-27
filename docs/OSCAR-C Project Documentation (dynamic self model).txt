@@ -1,0 +1,125 @@
+OSCAR-C Project Documentation: cognitive_modules/dynamic_self_model.py
+File Path: cognitive_modules/dynamic_self_model.py
+Purpose and Role:
+The DynamicSelfModel (DSM) component is responsible for maintaining and dynamically updating the OSCAR-C agent's internal representation of itself. This "self-model" encompasses learned knowledge about its own capabilities (what actions it can perform well), limitations (where it tends to fail or encounter errors), identity traits (e.g., curiosity, persistence), meta-knowledge (such as validated or invalid file paths), and awareness of its recent internal states. The DSM learns from the outcomes of the agent's actions and periodically performs a "reflection" process to update higher-level traits and meta-learning parameters.
+Theoretical Basis / Cognitive Inspiration:
+Self-Modeling / Self-Awareness: A core concept in AGI and theories of consciousness is the ability of an agent to model itself (Metzinger, 2003, "Being No One"). The DSM provides a computational basis for this, allowing the agent to have beliefs about its own properties and performance.
+Meta-cognition: Knowing one's own strengths and weaknesses is a key aspect of meta-cognition (Flavell, 1979). The DSM's tracking of capabilities and limitations directly supports this, enabling the agent (or other components like MetaCognitiveMonitor or HTNPlanner) to make more informed decisions.
+Learning and Adaptation: The DSM learns from experience (action outcomes) to refine its self-assessment. This is crucial for an agent operating in a dynamic environment where its effective abilities might change or where its initial self-assessment is incomplete.
+Identity Formation (Rudimentary): The _perform_reflection method, which updates identity_traits based on patterns in learning_events, is a rudimentary attempt to model how an agent's "personality" or behavioral tendencies might emerge from its history of interactions (similar concepts are explored in narrative psychology, e.g., McAdams, 2001, "The Psychology of Life Stories").
+Meta-Learning ("Learning to Learn"): The learning_rate_meta (identifying "fast_learner" and "slow_learner" action keys) is a form of meta-learning, where the agent learns about its own learning process for different types of tasks.
+Implementation Details:
+Inheritance:
+class DynamicSelfModel(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+DEFAULT_SELF_MODEL Structure: A dictionary defining the initial/default structure of self.self_model, including:
+version: Tracks model updates.
+identity_traits: Stores traits like curiosity, caution, persistence, adaptability (all floats, typically 0-1).
+capabilities: Dictionary mapping action_key (e.g., "action:READ_FILE", "action:CALL_LLM:complex_prompt") to a confidence score (0-1).
+limitations: Similar structure to capabilities, storing confidence in limitations.
+knowledge_meta:
+validated_paths: Dict[str, float]: Stores paths confirmed to be valid, with timestamp of validation.
+invalid_paths: List[str]: Stores paths confirmed to be invalid.
+learned_concepts: Dict: Placeholder for future concept learning.
+internal_state_awareness: Tracks last_valence, last_intensity (from PhenomenalState), and recent_error_types.
+learning_rate: Default learning rate for confidence updates.
+learning_rate_meta: Sub-dictionary to categorize action keys as "fast_learner" or "slow_learner".
+Configuration: Loaded during initialize.
+Model persistence path (self_model_path) is derived from agent_data_paths in the main config and agent_root_path.
+max_invalid_paths: Limits the size of the invalid_paths list.
+learning_rate: Overrides the default learning rate.
+learning_events_history_size: Max length for the learning_events deque.
+reflection_interval_cycles: How often (in agent update cycles) _perform_reflection is called.
+State Variables:
+self_model: Dict[str, Any]: The main dictionary holding the agent's self-representation.
+_model_path: Optional[Path]: Path for saving/loading the model.
+learning_events: Deque[Dict[str, Any]]: Stores a history of recent action types, outcomes, params, and errors for reflection.
+reflection_interval: int, cycles_since_reflection: int: Control periodic reflection.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration, sets up _model_path, and attempts to load an existing model using _load_model(). Ensures default keys exist in the loaded model.
+async def _load_model(self); / async def save_model(self);
+Handle loading and saving self.self_model to/from a JSON file. save_model uses a temporary file and os.replace for atomic writes.
+def _get_parameter_specific_suffix(self, action_type: Optional[str], action_params: Dict[str, Any], action_result_data: Optional[Any], action_error: Optional[str]) -> str;
+Generates a suffix for action_keys to make them more specific based on parameters or errors.
+Examples:
+For READ_FILE/WRITE_FILE: uses file_size_category from action_result_data (e.g., ":large_file", ":medium_file").
+For CALL_LLM: uses prompt length (e.g., ":complex_prompt", ":short_prompt").
+Appends "_timeout_error" if action_error indicates a timeout for CALL_LLM.
+async def update_self_model(self, last_action_type: Optional[str], action_outcome: str, action_params: Dict[str, Any], action_error: Optional[str], action_result_data: Optional[Any], current_phenomenal_state: Optional['PhenomenalState']);
+This is the primary learning method, called after an action is executed.
+Capabilities/Limitations Update:
+Generates a general action_key (e.g., "action:READ_FILE") and a action_key_specific (e.g., "action:READ_FILE:large_file") using _get_parameter_specific_suffix.
+For both keys, if action_outcome == "success": increases confidence in self_model.capabilities and decreases confidence in self_model.limitations (if an entry exists).
+If action_outcome == "failure": decreases confidence in capabilities and increases confidence in limitations.
+Low-confidence entries (< 0.05) might be removed.
+Path Knowledge Update:
+If last_action_type is a file operation (LIST_FILES, READ_FILE, EXPLORE, WRITE_FILE):
+Resolves the path involved (from action_result_data.path or action_params.path, using controller.agent_root_path for relative paths).
+If "success": adds path to validated_paths (with timestamp) and removes from invalid_paths.
+If "failure" due to a path-related error (e.g., "not exist", "permission denied"): adds path to invalid_paths (capping list size) and removes from validated_paths.
+Internal State Awareness Update: Updates last_valence, last_intensity from current_phenomenal_state. Appends error_type to recent_error_types on failure.
+Learning Event Recording: Appends details of the action and outcome to self.learning_events. Increments self.cycles_since_reflection.
+Periodic Reflection: If self.cycles_since_reflection >= self.reflection_interval, calls await self._perform_reflection().
+Updates model version and last_update_time if any changes occurred.
+async def _perform_reflection(self);
+Called periodically by update_self_model. Analyzes the self.learning_events history.
+Updates identity_traits:
+adaptability: Influenced by diversity of action keys tried and success rate.
+persistence: Influenced by success rate (inversely). (The code seems to have a simpler logic here related to (0.6 - success_rate)).
+curiosity: Influenced by the rate of trying actions not already in high-confidence capabilities.
+caution: Influenced by success rate (inversely).
+Updates learning_rate_meta.capabilities:
+Identifies action_keys as "fast_learner" if their outcomes in learning_events are highly consistent (e.g., >= 85% same outcome for >= 3 events).
+Identifies action_keys as "slow_learner" if outcomes are highly inconsistent (e.g., <= 40% for most common outcome for >= 3 events).
+Clears self.learning_events after processing.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Extracts necessary information from input_state (last action details, phenomenal state) and calls self.update_self_model.
+async def get_capability_confidence(self, action_type, params=None) -> float; / async def get_limitations(self, action_type=None) -> Dict;
+Provide interfaces to query learned capabilities and limitations (not directly used by AgentController cycle but could be by MetaCognitiveMonitor or HTNPlanner).
+async def reset(self) -> None;
+Resets self.self_model to DEFAULT_SELF_MODEL (deep copy), clears history/counters.
+async def get_status(self) -> Dict[str, Any];
+Returns current model version, counts of capabilities/limitations, path knowledge stats, reflection cycle status, etc.
+async def shutdown(self) -> None;
+Calls self.save_model() to persist the final state.
+Algorithms Used:
+Confidence Score Updating: A simple reinforcement learning-like update rule:
+Success: new_confidence = old + learning_rate * (1.0 - old)
+Failure: new_confidence = old - learning_rate * old * factor (factor slightly different for capability decrease vs. limitation increase).
+Sliding Window History: collections.deque(maxlen=...) for learning_events and recent_error_types.
+Pattern Analysis (in _perform_reflection):
+Calculates success rates, action diversity.
+Uses collections.Counter to find outcome consistency for identifying fast/slow learning action keys.
+Relationship to Overall Project & Logic Flow:
+The DynamicSelfModel is updated in Step 10B of the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via input_state to process):
+last_action_type, action_outcome, action_params, action_error, action_result_data: Details of the action just executed.
+current_phenomenal_state: The PhenomenalState from the current cycle.
+(Optionally, cognitive_state, active_goal, self_model_summary are also in the input_state provided by AgentController's model_update_context, though DSM primarily uses the action/phenomenal parts).
+Outputs: The DSM primarily updates its internal self.self_model. It does not directly output data into the main cycle flow for immediate use by the next step, but its state is available for querying.
+Potential Consumers of DSM State (via controller or direct query):
+MetaCognitiveMonitor: Could query DSM for capability confidence or known limitations when analyzing goal stagnation or suggesting interventions.
+HTNPlanner: Could query DSM to assess if the agent is "capable" of certain operators before including them in a plan, or to choose methods that play to its strengths.
+EmergentMotivationSystem: The current EMS logic in evaluate_intrinsic_motivation uses self_model_summary (which includes num_capabilities and num_limitations from DSM's status) to influence the competence drive.
+NarrativeConstructor: Might query identity traits to color narrative entries.
+Current State of the Script:
+Functionality Implemented:
+Core logic for updating capabilities, limitations, and path knowledge based on action outcomes is functional.
+The _get_parameter_specific_suffix allows for learning more fine-grained capabilities/limitations.
+The _perform_reflection method for updating identity_traits and learning_rate_meta is implemented.
+Model persistence (load/save to JSON) is implemented and uses the centralized path from agent_data_paths.
+Alignment with Plans:
+Path knowledge updates align with "CWD Management Standardization" (Phase I).
+Deriving specific capability/limitation keys based on action parameters/results and implementing _perform_reflection directly fulfill the "DynamicSelfModel - Advanced Features (v1)" tasks from Phase II of the development checklist.
+Known Limitations/Placeholders:
+identity_traits Influence: While traits are updated by reflection, there's no current mechanism described for these traits to actively influence other agent behaviors (e.g., a highly "cautious" agent taking fewer risks). This feedback loop is future work.
+learned_concepts: This part of knowledge_meta is a placeholder.
+Simplicity of Trait Updates: The formulas for updating identity traits in _perform_reflection are heuristic and relatively simple.
+Learning Rate: The global learning_rate is used, but the learning_rate_meta (fast/slow learner keys) is not yet used to modulate this learning rate for specific capabilities.
+Suggestions for Future Development/Refinement:
+Feedback Loop for Identity Traits: Implement mechanisms for identity_traits to influence decision-making (e.g., caution affecting risk assessment in ValueSystem or planner; curiosity directly boosting novelty preference in AttentionController).
+Utilize learning_rate_meta: Modify the capability/limitation update logic to use different effective learning rates for action keys identified as "fast_learner" or "slow_learner".
+Temporal Decay/Forgetting for Self-Knowledge: Consider adding decay mechanisms for capability/limitation confidence scores or for validated_paths if they are not reconfirmed over time. This prevents overconfidence based on stale information.
+Abstract Capabilities: Introduce a hierarchy or ontology for capabilities, allowing the agent to generalize (e.g., if good at READ_FILE:json_file and READ_FILE:xml_file, infer general proficiency in READ_FILE:structured_data).
+Self-Efficacy Metrics: Develop more explicit metrics for self-efficacy related to specific goals or task types, which could influence goal selection or persistence.

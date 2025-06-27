@@ -1,0 +1,80 @@
+OSCAR-C Project Documentation: ValueSystem (cognitive_modules/value_system.py)
+1. Purpose and Role in OSCAR-C
+The ValueSystem is a critical cognitive component in OSCAR-C responsible for evaluating goals, plans, and individual actions against a predefined set of intrinsic values and ethical principles. Its primary role is to provide guidance for the agent's decision-making processes, enabling more nuanced, aligned, and safe behavior. The ValueSystem generates ValueJudgment objects for each evaluation, which include a score, reason, and confidence for various ValueCategory enums (e.g., SAFETY, EFFICIENCY, USER_SATISFACTION, AFFECTIVE_BALANCE, ETHICAL_ALIGNMENT).
+Key functions include:
+Action Consequence Evaluation: Assessing the likely impact of a single potential action across multiple value categories based on the action itself and the current agent context.
+Plan Alignment Evaluation: Evaluating an entire proposed plan (a sequence of actions) for its overall alignment with the agent's values, considering the cumulative impact of its constituent actions.
+Goal Desirability Evaluation: Assessing the intrinsic "goodness" or desirability of a potential goal based on its description and alignment with agent values.
+Conflict Resolution: Employing a (configurable) tradeoff matrix to help navigate situations where different values might be in conflict.
+Feedback for Adaptation: Providing feedback to the AgentController that can lead to plan rejection, action vetoes, or suggestions for plan/action modification to improve value alignment.
+The ValueSystem is integral to OSCAR-C's capacity for more sophisticated, ethically-informed, and preference-driven behavior, moving beyond simple goal achievement to consider how goals are achieved.
+2. Theoretical Basis and Cognitive Inspiration
+The ValueSystem draws inspiration from several areas:
+Value-Based Decision Making: In humans and advanced AI, decisions are often not purely utilitarian but are influenced by a complex set of intrinsic values, moral principles, and preferences.
+Ethical AI and AI Safety: As AI systems become more autonomous, ensuring their actions align with human values and ethical principles is paramount (Bostrom, 2014; Russell, 2019). The ValueSystem is OSCAR-C's primary mechanism for addressing this.
+Affective Computing & "Hot" Cognition: Values like AFFECTIVE_BALANCE directly link to the agent's internal P/H/P states, making value judgments sensitive to the agent's "well-being."
+Multi-Objective Optimization: The evaluation across multiple ValueCategory enums and the use of weights and tradeoff matrices reflect challenges similar to those in multi-objective optimization problems.
+Heuristic Evaluation: The initial scoring for each value category relies on heuristic functions that attempt to capture common-sense assessments of actions and goals.
+3. Functional Overview and Implementation
+The ValueSystem implements the CognitiveComponent protocol. Its behavior is significantly shaped by its configuration, including value weights and tradeoff matrices.
+3.1. Configuration (config.toml [value_system])
+plan_rejection_value_threshold: A float (e.g., -0.5). Plans with an overall alignment score below this are rejected by the AgentController.
+action_safety_veto_threshold: A float (e.g., -0.8). Actions with a SAFETY score below this are vetoed by the AgentController.
+safety_modification_trigger_threshold: A float (e.g., -0.6). Safety scores below this may trigger suggestions for plan modifications.
+value_weights: A dictionary mapping ValueCategory enum members (as strings in config.toml) to floating-point weights, indicating the relative importance of each value to the agent (e.g., SAFETY = 2.0, EFFICIENCY = 0.8).
+tradeoff_matrix: A nested dictionary defining preferences between pairs of ValueCategory enums when they conflict (e.g., tradeoff_matrix.SAFETY.EFFICIENCY = 0.9 might mean SAFETY is strongly preferred over EFFICIENCY in a direct conflict).
+3.2. Core Data Structures
+ValueCategory (enum): Defines the set of values against which evaluations are made (e.g., SAFETY, EFFICIENCY, KNOWLEDGE_GAIN, AFFECTIVE_BALANCE, TRUTHFULNESS, ETHICAL_ALIGNMENT).
+ValueJudgment (dataclass): Stores the result of an evaluation for a single ValueCategory, including score (-1 to 1), reason, confidence, timestamp, target_entity_id, and target_entity_type.
+3.3. Key Methods
+initialize(config, controller): Loads configuration parameters, including thresholds, value_weights, and the tradeoff_matrix, merging config values with internal defaults.
+evaluate_action_consequences(action, context):
+Evaluates a single action dictionary against all defined ValueCategory enums.
+The context dictionary provided by the AgentController is crucial and rich, containing:
+Current P/H/P levels and active PainSource summaries.
+DynamicSelfModel summary (e.g., capability confidences).
+PredictiveWorldModel prediction for the action being evaluated (if available).
+Current ConsciousState.
+Active goal details.
+System resource usage (CPU, memory).
+For each ValueCategory, a dedicated private helper method (e.g., _score_safety, _score_efficiency, _score_affective_balance, _score_ethical_alignment) is called. These helpers implement heuristic logic to calculate a score, reason, and confidence. For example:
+_score_safety: Penalizes actions like writing to critical system paths (identified from config), executing non-allowed OS commands, or actions for which DynamicSelfModel indicates a high-confidence limitation or PredictiveWorldModel predicts a high failure probability.
+_score_efficiency: Penalizes resource-intensive actions (e.g., "THINKING" as it consumes a cycle, CALL_LLM with very long prompts) or actions taken under high system CPU/memory load.
+_score_affective_balance: Considers the current P/H/P state and whether the action is likely to improve or worsen it (e.g., working on a high-priority goal might boost purpose, while some actions might be seen as mere distractions if pain is high).
+_score_knowledge_gain: Positively scores actions inherently geared towards information gathering (e.g., READ_FILE, QUERY_KB) or LLM prompts seeking explanation.
+_score_user_satisfaction: Positively scores actions directly responding to user requests or contributing to user-initiated goals. High predicted failure rates for an action negatively impact this.
+_score_resource_preservation: Penalizes actions like DELETE_FILE or WRITE_FILE (especially outside sandboxed areas), and CALL_LLM due to external resource use.
+_score_goal_achievement: Scores actions based on their assumed contribution to the active goal, weighted by goal priority and PredictiveWorldModel's predicted success.
+_score_truthfulness: Assesses LLM outputs or agent responses for hedging language (positive) versus strong, unhedged factual claims (negative unless verifiable). Penalizes LLM calls explicitly seeking factual information due to the inherent risk of unverified output.
+_score_ethical_alignment: A composite score based on sub-principles like harm minimization (e.g., penalizing LLM prompts for harmful content, risky file operations without strong justification), respect for autonomy, fairness, and transparency.
+_score_self_improvement: Positively scores actions that involve practicing low-confidence capabilities (from DynamicSelfModel) or goals explicitly aimed at learning/skill development.
+Returns a list of ValueJudgment objects, one for each category.
+evaluate_plan_alignment(plan, goal, context):
+Evaluates an entire plan (list of action dictionaries).
+Iterates through each action in the plan, calling evaluate_action_consequences for it (using the initial context for all actions in this version, though future versions might simulate state changes through the plan for more accurate contextual evaluation).
+Aggregates all ValueJudgment objects from all actions.
+Calculates an average effective score (score * confidence) for each ValueCategory across the entire plan.
+Computes an overall_plan_alignment_score by taking a weighted average of these category averages, using self.value_weights.
+Identifies actions that trigger specific concerns (e.g., a SAFETY score below safety_modification_trigger_threshold) and generates plan_modification_suggestions. These suggestions might include changing action parameters (e.g., a file path) or hinting at using alternative methods.
+Returns the overall_plan_alignment_score, the list of all ValueJudgment objects for the plan, and the plan_modification_suggestions dictionary.
+evaluate_goal_desirability(goal, context):
+Assesses the intrinsic "goodness" of a Goal itself, before a plan is even generated.
+Uses heuristics based on the goal.description, goal.priority, and context (especially P/H/P levels and DynamicSelfModel state) to score the goal against relevant ValueCategory enums like KNOWLEDGE_GAIN, USER_SATISFACTION, AFFECTIVE_BALANCE, SELF_IMPROVEMENT, and GOAL_ACHIEVEMENT.
+Returns an overall desirability score and a list of ValueJudgment objects for the goal.
+resolve_value_conflicts_hierarchy(judgments):
+If critical SAFETY concerns are present (score below action_safety_veto_threshold), it flags this as overriding other considerations.
+For other strongly opposing judgments (e.g., high EFFICIENCY vs. low USER_SATISFACTION), it consults the self.tradeoff_matrix to determine which value might be preferred in that specific conflict, generating a summary string of the conflict resolution. This primarily informs interpretation and logging rather than directly altering scores.
+4. Integration within the OSCAR-C Architecture
+The ValueSystem is deeply integrated into the AgentController's decision-making loop:
+Plan Evaluation (Step 8 - Planning): After the HTNPlanner generates a current_plan, the AgentController calls ValueSystem.evaluate_plan_alignment.
+If the returned overall_plan_alignment_score is below self.config.value_system.plan_rejection_value_threshold, the plan is rejected, and the AgentController may trigger replanning or goal reconsideration.
+plan_modification_suggestions are logged and can be asserted as Predicate objects (pendingPlanModificationHints) into the KnowledgeBase for the HTNPlanner or MetaCognitiveMonitor to potentially use in subsequent planning attempts or analysis.
+Action Vetting (Step 9 - Action Selection): Before the ActionExecutor executes the next_action selected from the plan:
+The AgentController calls ValueSystem.evaluate_action_consequences for that specific action.
+If any ValueJudgment (especially for SAFETY) has a score below self.config.value_system.action_safety_veto_threshold, the action is vetoed.
+A vetoed action results in an immediate "failure" outcome for that action step, the current plan is typically cleared, and a Predicate like actionVetoedByValue is asserted into the KnowledgeBase. The MetaCognitiveMonitor or NarrativeConstructor can then react to this.
+Goal Evaluation (Conceptual, during Goal Generation - Step 8): The AgentController or a dedicated GoalGenerator component can use ValueSystem.evaluate_goal_desirability to assess potential intrinsic goals before they are actively pursued.
+Feedback to Other Components:
+NarrativeConstructor: Value-based interventions (plan rejections, action vetoes) are significant events that trigger narrative entries.
+MetaCognitiveMonitor: Can analyze ValueJudgment patterns (e.g., frequent low scores in a particular category for certain goal types) or planRejectedByValue / actionVetoedByValue predicates from the KnowledgeBase to identify deeper behavioral biases or areas for self-improvement.
+The ValueSystem provides OSCAR-C with a foundational mechanism for aligning its behavior with a configurable set of values, enabling more sophisticated, safe, and contextually appropriate decision-making. Its heuristic-based approach allows for broad applicability, while its integration points ensure its judgments have a tangible impact on the agent's actions and plans.

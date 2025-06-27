@@ -1,0 +1,124 @@
+OSCAR-C Project Documentation: cognitive_modules/predictive_world_model.py
+File Path: cognitive_modules/predictive_world_model.py
+Purpose and Role:
+The PredictiveWorldModel (PWM) component is designed to enable OSCAR-C to anticipate the likely outcomes of its potential actions or external events. It makes predictions early in the cognitive cycle based on the current context and the action being considered. After an action is executed, the PWM updates its internal model by comparing its prediction with the actual result, allowing it to learn from experience and improve future prediction accuracy. This predictive capability is crucial for more intelligent planning, attention allocation (by flagging surprising outcomes), and adaptive behavior.
+Theoretical Basis / Cognitive Inspiration:
+Predictive Processing / Predictive Coding: This component directly embodies principles from predictive processing theories (Clark, 2013; Friston, 2010), which posit that the brain constantly generates predictions about sensory inputs and learns by minimizing the error between predictions and actual inputs ("surprise").
+Forward Models (Internal Models): In robotics and motor control, forward models predict the sensory consequences of motor commands. The PWM acts as a more general forward model for various types of actions within the agent's cognitive and operational domain.
+Learning from Experience: The ability to update the model based on action_result vs. prediction is a form of online learning, allowing the agent to adapt its understanding of cause and effect in its environment.
+World Models in AI: Many AI systems, particularly in model-based reinforcement learning or planning, utilize a "world model" that captures the dynamics of the environment (Sutton & Barto, 2018).
+Causal Reasoning (Future Goal): While the current implementation learns outcome frequencies, a long-term goal (as hinted in planning documents) is to move towards more causal models (e.g., Bayesian Networks) to understand why certain outcomes occur.
+Implementation Details:
+Inheritance:
+class PredictiveWorldModel(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+Configuration: Loaded during initialize from the predictive_world_model section of config.toml.
+initial_version: Starting version for the model.
+learning_rate: A conceptual parameter (currently not directly used in the frequency-counting update mechanism but retained for potential future algorithms).
+memory_length: Maximum number of entries in prediction_history.
+save_interval_versions: How often (in terms of model version increments due to learning) to save the model to disk.
+Model persistence path (predictive_model_path) is derived from agent_data_paths in the main config and agent_root_path.
+State Variables:
+model_version: int: Tracks the version of the learned model.
+last_update_time: Optional[float]: Timestamp of the last model update.
+last_prediction_error: Optional[Dict[str, Any]]: Stores details of the most recent significant discrepancy between a prediction and an actual outcome. This is a crucial output used by AttentionController and EmergentMotivationSystem.
+model_path: Optional[Path]: Absolute path to the JSON file for saving/loading the model.
+causal_rules: Dict[str, Counter]: Stores learned outcome frequencies for general action_keys. E.g., {"READ_FILE:target_X": Counter({"success": 5, "failure": 1})}.
+outcome_frequencies: Dict[str, Counter]: Stores outcome frequencies for action types (ignoring parameters). E.g., {"READ_FILE": Counter({"success": 50, "failure": 10})}.
+causal_context: Dict[str, Dict[str, Counter]]: Stores learned outcome frequencies for action_keys conditioned on specific context_keys. E.g., {"READ_FILE:target_X": {"low_cs": Counter({"failure": 3})}}.
+prediction_history: Deque[Dict[str, Any]]: A sliding window of recent predictions and their actual outcomes.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters.
+Sets up model_path and attempts to load a previously saved model using _load_model().
+async def _load_model(self); / async def _save_model(self);
+Handle loading and saving the PWM's learned state (causal_rules, outcome_frequencies, causal_context, model_version) to/from a JSON file. Uses collections.Counter internally but saves as dictionaries.
+def _get_action_key(self, action_type: str, params: Dict[str, Any]) -> str;
+Generates a specific key for learning and prediction by combining action_type with relevant information extracted from params.
+For file operations, it might include the target filename (e.g., READ_FILE:target_config.toml).
+For CALL_LLM, it might categorize by prompt length (e.g., CALL_LLM:long_prompt).
+def _extract_context_key(self, context: Dict[str, Any]) -> str;
+Generates a key representing the current operational context.
+Considers consciousness_level_name (mapping to "low_cs", "mid_cs", "high_cs"), active_goal_type, and drive levels for curiosity and satisfaction (mapping to "low_cur", "high_cur", etc.).
+Returns "default_context" if no specific context features are prominent. Keys are sorted for consistency.
+def _get_most_likely_outcome(self, outcome_counter: Counter) -> Tuple[str, float];
+Given a Counter of outcomes, returns the most frequent outcome and its confidence (frequency / total occurrences).
+def _get_default_prediction_heuristic(self, action_type: str) -> str;
+Provides a very basic default prediction if no learned rules apply. For instance, read operations are heuristically predicted as "success". For WRITE_FILE, it checks config.filesystem.allow_file_write.
+async def predict_next_state(self, current_state_info: Dict[str, Any]) -> Dict[str, Any];
+Input: current_state_info dictionary containing action_to_execute (with type and params) and context (with consciousness level, goal type, drives).
+Prediction Logic (Hierarchical Fallback):
+Generates action_key and context_key.
+Context-Specific Rule: Tries to predict using self.causal_context[action_key][context_key].
+General Action Rule: If no context-specific rule or its confidence is low, falls back to self.causal_rules[action_key].
+Parent Action Type Rule: If specific action_key rule is weak, falls back to rules for the general action_type (from self.causal_rules[action_type]), with adjusted (lower) confidence.
+Hardcoded Test File Rules: Includes specific logic to predict "success" for READ_FILE on "test_good_file.txt" and critically for "non_existent_for_surprise.txt" to facilitate testing the surprise mechanism.
+Default Heuristic: If confidence is still very low or no rules apply, uses _get_default_prediction_heuristic(action_type).
+Output: A dictionary {"predicted_outcome": str, "confidence": float, "basis": str} indicating the prediction source (e.g., "context_specific_rule", "default_heuristic").
+async def update_model(self, prediction: Optional[Dict[str, Any]], actual_result: Dict[str, Any]);
+Input: The prediction made earlier and the actual_result of the executed action (including its type, params, outcome, error, and context at execution time).
+Error Detection: Compares prediction.predicted_outcome with actual_result.outcome.
+If they mismatch and the prediction was not "unknown", it sets self.last_prediction_error to a detailed dictionary. This dictionary includes:
+type: "outcome_mismatch"
+predicted, actual: The differing outcomes.
+certainty_of_prediction: The confidence of the failed prediction.
+action_type, action_params.
+error_source_details: Contains source action info and calculated error_magnitude (based on confidence difference).
+timestamp.
+If the prediction matched or was "unknown", and a previous outcome_mismatch error was stored, self.last_prediction_error is cleared.
+Learning:
+Generates action_key (from actual_result.type and params) and context_key (from actual_result.context).
+Increments the count for the actual_outcome in:
+self.causal_rules[action_key]
+self.outcome_frequencies[action_type]
+self.causal_context[action_key][context_key] (if context_key is not "default_context").
+Appends details of the prediction event to self.prediction_history.
+Increments self.model_version if a prediction error occurred (this incentivizes learning from errors for versioning/saving).
+Periodically saves the model to disk based on save_interval_versions.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Handles two types of requests in input_state:
+"predict_request": Calls self.predict_next_state.
+"update_request": Calls self.update_model. For update, it returns {"update_status": "processed", "last_prediction_error_details": self.last_prediction_error}.
+This structure allows AgentController to use PWM for both prediction (Step 1) and model update (Step 10).
+async def reset(self) -> None;
+Clears all learned rules, history, and resets version/error state.
+async def get_status(self) -> Dict[str, Any];
+Returns model version, last update time, full last_prediction_error dictionary, counts of learned rules, and history size.
+Algorithms Used:
+Frequency Counting / Online Learning: The model learns by maintaining counters for observed outcomes of specific (action_key, context_key) pairs. This is a simple form of instance-based or table-based learning.
+Hierarchical Fallback Logic: For prediction, it uses a cascade of rules: context-specific -> general action-specific -> general action-type -> hardcoded -> default heuristic.
+Contextualization: Uses _get_action_key and _extract_context_key to create fine-grained keys for learning, enabling context-dependent predictions.
+Relationship to Overall Project & Logic Flow:
+The PredictiveWorldModel is involved in two key steps of the AgentController's 12-step cognitive cycle:
+Step 1B (Prediction): AgentController calls PWM.process({"predict_request": ...}). The prediction_result is then:
+Potentially fed as an attention candidate to AttentionController.
+Stored by AgentController to be compared with the actual outcome in Step 10.
+Step 10A (Model Update): AgentController calls PWM.process({"update_request": ...}), providing the earlier prediction_result and the _last_action_result.
+PWM updates its internal model.
+Crucially, PWM.last_prediction_error is updated here. This specific attribute is then read by:
+**AttentionController (via AgentController.last_prediction_error_for_attention in the next cycle, Step 2) to calculate surprise scores.
+**EmergentMotivationSystem (in the current cycle, Step 10C) to potentially boost curiosity.
+**NarrativeConstructor (in the current cycle, Step 11) as a potential trigger for a narrative entry.
+Current State of the Script:
+Functionality Implemented:
+Adaptive learning of outcome frequencies for general actions (causal_rules) and context-specific actions (causal_context) using collections.Counter.
+Hierarchical prediction logic with fallbacks.
+Generation of last_prediction_error dictionary upon mismatch, including error_magnitude.
+Model persistence (load/save to JSON).
+Robust key generation for actions and contexts.
+Hardcoded predictions for specific test files to facilitate testing of the "surprise" mechanism in AttentionController.
+Alignment with Plans:
+Successfully implements the core requirements for Phase II "PredictiveWorldModel - Adaptive Learning (v1)":
+Storage for outcome frequencies.
+predict_next_state uses these frequencies.
+update_model updates these frequencies.
+Implements the optional "context-specific outcome frequencies" enhancement.
+Known Limitations/Placeholders:
+Frequency Counting: The learning mechanism is based on simple frequency counting, not deeper causal modeling (like Bayesian Networks, planned for Phase III).
+_get_default_prediction_heuristic: This is basic. It could be improved by consulting HTN operator definitions for expected effects if no learned rule applies. (The code contains a commented-out section indicating this was considered for HTN operator effects).
+Limited Parameter Consideration in _get_action_key: While _get_action_key considers some parameters (file basenames, LLM prompt length), it could be made more granular or learn which parameters are truly predictive.
+Suggestions for Future Development/Refinement:
+Transition to Causal Models (Phase III): Gradually replace frequency counters with a more sophisticated causal modeling approach (e.g., Causal Bayesian Networks, Dynamic Bayesian Networks) to learn dependencies and perform more robust "what-if" reasoning. This would involve learning Conditional Probability Distributions (CPDs).
+Uncertainty Quantification: Enhance the model to explicitly represent and output its uncertainty about predictions (e.g., entropy of the predicted outcome distribution). This uncertainty can be a powerful signal for EmergentMotivationSystem to drive "curiosity" or exploration towards poorly understood parts of the environment.
+Integrate with HTN Planner: Allow the HTNPlanner to query the PWM for predicted outcomes of potential plan steps during plan generation or evaluation, enabling more informed planning (model-based planning).
+Learn Effects, Not Just Outcomes: Extend the model to predict not just a single "success/failure" outcome string, but a set of Predicate changes (expected effects) like HTN operators do. This would make its predictions more directly comparable to planner expectations.

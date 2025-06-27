@@ -1,0 +1,113 @@
+OSCAR-C Project Documentation: cognitive_modules/emergent_motivation_system.py
+File Path: cognitive_modules/emergent_motivation_system.py
+Purpose and Role:
+The EmergentMotivationSystem (EMS) is responsible for simulating and managing the OSCAR-C agent's internal "drives" or intrinsic motivations. These drives, such as curiosity, satisfaction, and competence, are not directly tied to external rewards but emerge from the agent's interactions with its environment, its success or failure in achieving goals, its learning progress, and its self-assessment. The EMS updates the levels of these drives each cognitive cycle, and these drive levels can, in turn, influence other cognitive processes like attention allocation, goal generation, and potentially the affective coloring of the agent's PhenomenalState. This component is crucial for fostering autonomous behavior, exploration, and sustained engagement in the absence of explicit external directives.
+Theoretical Basis / Cognitive Inspiration:
+Intrinsic Motivation: This component is directly inspired by theories of intrinsic motivation in psychology and AI (Ryan & Deci, 2000; Oudeyer & Kaplan, 2007). Intrinsic motivations are those that arise from within the individual (or agent) due to the inherent satisfaction or interest in the activity itself, rather than for some separable consequence.
+Curiosity: The drive to explore, discover, and learn new things, often triggered by novelty, uncertainty, or prediction errors.
+Competence/Mastery: The drive to become more effective in interacting with the environment and achieving goals.
+Satisfaction/Effectance: A sense of pleasure or fulfillment derived from successful actions or goal achievement.
+Homeostatic Principle (Implicit): Drives often function somewhat like homeostatic systems, where the agent tries to maintain them in an optimal range (e.g., reducing a "curiosity deficit" or maintaining a "satisfaction level"). The decay mechanism towards a neutral 0.5 in the EMS reflects this.
+Predictive Processing and Learning: The link between PredictiveWorldModel's prediction errors and the curiosity drive aligns with theories suggesting that learning progress and moderate unpredictability are intrinsically motivating (Schmidhuber, 1991, on formal theory of creativity, fun, and intrinsic motivation).
+Implementation Details:
+Inheritance:
+class EmergentMotivationSystem(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+DEFAULT_DRIVES Structure: A dictionary defining the default parameters for each drive:
+Example: "curiosity": {"value": 0.5, "decay": 0.02, "gain_discovery": 0.08, "gain_prediction_error": 0.05, "loss_repetition": 0.04}.
+value: The current level of the drive (0-1).
+decay: Rate at which the drive value returns towards a baseline (0.5).
+Gain/loss parameters: Specific factors by which the drive value is adjusted based on events.
+Configuration: Loaded during initialize from the emergent_motivation_system (or older motivation_engine) section of config.toml. Allows overriding default drive parameters.
+State Variables:
+drives: Dict[str, Dict[str, Any]]: The main dictionary holding the current state of all drives and their parameters.
+_kb: Optional[KnowledgeBase]: A reference to the KnowledgeBase component, used to fetch recent action history.
+_last_self_model_summary: Optional[Dict[str, Any]]: Stores the previous status summary from DynamicSelfModel to detect changes in capabilities/limitations.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads drive parameters from configuration, merging them with DEFAULT_DRIVES.
+Requires and stores a valid reference to the KnowledgeBase instance from the controller. Fails initialization if KB is not available.
+async def _get_recent_action_history(self, window_size: int) -> List[Dict[str, Any]];
+Queries the KnowledgeBase (via self._kb.query_state({"recent_facts": ...})) for recent eventOccurred predicates of type "actionExecution".
+Filters out "THINKING" actions.
+Sorts by timestamp and returns the window_size most recent relevant actions.
+Handles potential errors during KB query.
+async def evaluate_intrinsic_motivation(self, cognitive_state: Dict[str, Any], last_action_result: Dict[str, Any], phenomenal_state: Optional['PhenomenalState'], active_goal: Optional['Goal'], self_model_summary: Optional[Dict[str, Any]]) -> Dict[str, float];
+This is the core logic for updating drive values.
+Historical Success Rate: Calculates historical_success_rate based on the output of _get_recent_action_history.
+Competence Change Signal: Compares self_model_summary (current DSM status) with self._last_self_model_summary to determine if there was a net increase or decrease in capabilities vs. limitations. Sets competence_change_signal to 1.0 (increase), -1.0 (decrease), or 0.0.
+Prediction Error Magnitude:
+Retrieves last_prediction_error from the PredictiveWorldModel instance (via self._controller).
+If the error is an "outcome_mismatch", extracts/calculates prediction_error_magnitude (0-1) from error_details.error_source_details.error_magnitude or defaults to 0.5 if only type is known.
+Drive Update Loop: Iterates through each drive in self.drives:
+Decay: Applies decay: new_value = current_value + decay_param * (0.5 - current_value).
+Curiosity Drive:
+Increases if last_action_type was a "discovery" action (e.g., EXPLORE, READ_FILE) and last_outcome was "success". Boost is gain_discovery * (1.0 - new_value).
+Increases if prediction_error_magnitude > 0.1. Boost is gain_prediction_error * prediction_error_magnitude * (1.0 - new_value).
+Satisfaction Drive:
+Increases if historical_success_rate > 0.5, decreases if < 0.5. Change is proportional to (historical_success_rate - 0.5) and gain_success_rate or loss_failure_rate.
+Increases significantly if active_goal status is ACHIEVED. Boost is gain_goal_achieved * (1.0 - new_value).
+Decreases significantly if active_goal status is FAILED. Penalty is loss_goal_failed * new_value.
+Competence Drive:
+Increases if competence_change_signal > 0 (more capabilities learned). Boost is gain_capability_increase * (1.0 - new_value).
+Decreases if competence_change_signal < 0 (more limitations learned). Penalty is loss_limitation_increase * new_value.
+Also influenced by historical_success_rate similarly to Satisfaction, but with different gain/loss parameters.
+Clamps the new_value for each drive between 0.0 and 1.0 and updates params["value"].
+Updates self._last_self_model_summary.
+Returns a dictionary of the current drive values: {drive_name: rounded_value}.
+def get_drive_values(self) -> Dict[str, float];
+A utility to get a simple dictionary of current drive names and their rounded values.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+Extracts necessary context from input_state (cognitive_state, last_action_result, phenomenal_state, active_goal, self_model_summary).
+Calls self.evaluate_intrinsic_motivation.
+Returns {"drive_values": new_drive_values}.
+async def reset(self) -> None;
+Resets all drive values to their configured defaults (or DEFAULT_DRIVES initial values if not in config). Clears _last_self_model_summary.
+async def get_status(self) -> Dict[str, Any];
+Returns current drive values.
+Algorithms Used:
+Weighted Gain/Loss Updates with Decay: Drive values are updated using a combination of exponential decay towards a baseline (0.5) and additive/subtractive changes based on specific gain/loss parameters and event magnitudes (e.g., success rate, prediction error magnitude, capability changes). The gain/loss is often scaled by (1.0 - current_value) for gains (diminishing returns) or current_value for losses.
+Sliding Window History Analysis (via KB): _get_recent_action_history and the calculation of historical_success_rate.
+Change Detection: Comparing current self_model_summary with _last_self_model_summary to detect net changes in capabilities/limitations.
+Relationship to Overall Project & Logic Flow:
+The EmergentMotivationSystem is updated in Step 10C of the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via input_state to process):
+cognitive_state: General agent state information.
+last_action_result: Outcome of the most recent action.
+phenomenal_state: Current PhenomenalState (though not heavily used by current EMS logic, available for future affective links).
+active_goal: The current Goal object (its status is checked).
+self_model_summary: Status summary from DynamicSelfModel.
+Implicitly uses PredictiveWorldModel.last_prediction_error (via self._controller).
+Implicitly uses KnowledgeBase (via self._kb) for action history.
+Output (to AgentController):
+{"drive_values": Dict[str, float]}: The updated values for all drives.
+Potential Influence / Downstream Consumers:
+AgentController:
+Uses drive values (especially curiosity) in _oscar_generate_or_select_goal to decide whether to generate a default "Observe and learn" goal.
+Could use drive values to prioritize among multiple pending goals.
+AttentionController: Could be modified to use drive values to bias attention (e.g., high curiosity boosts novelty preference).
+NarrativeConstructor: The drive_state (from EMS output) is passed to NarrativeConstructor.process and is used in _is_significant (drive shifts can trigger entries) and in the LLM prompt for generate_narrative_entry.
+PhenomenalState (Indirectly): While not a direct consumer, drive states could conceptually influence the valence or intensity of the PhenomenalState if ExperienceStream were enhanced to consider them.
+Current State of the Script:
+Functionality Implemented:
+Updates for curiosity, satisfaction, and competence drives are implemented.
+Curiosity drive correctly incorporates PredictiveWorldModel.last_prediction_error magnitude.
+Satisfaction drive correctly considers active_goal status (achieved/failed) and historical success rate.
+Competence drive correctly considers changes in DynamicSelfModel's capability/limitation counts and historical success rate.
+Uses KnowledgeBase for recent action history to calculate success rates.
+Configuration of drive parameters is supported.
+Alignment with Plans:
+Successfully implements the Phase II checklist item: "EmergentMotivationSystem - Curiosity & Prediction Error: Modify evaluate_intrinsic_motivation to increase 'curiosity' drive based on the magnitude or presence of PredictiveWorldModel.last_prediction_error".
+The interactions with DSM and goal status for other drives also align with building richer inter-component feedback loops.
+Known Limitations/Placeholders:
+Goal Generation: The EMS itself does not generate new goals. It only updates drive values. The AgentController's _oscar_generate_or_select_goal has very basic logic to create a default goal based on curiosity. A more sophisticated Goal Generation module influenced by a wider range of drive states is future work.
+Drive Influence on Action Selection: The direct influence of drives on action selection (beyond default goal generation) is not yet explicitly implemented (e.g., biasing the planner or action choice).
+Repetition Penalty for Curiosity: The loss_repetition parameter for curiosity is defined but not currently used in the update logic.
+Suggestions for Future Development/Refinement:
+Dedicated Goal Generation Module: Create a separate GoalGenerator component that takes the current drive state from EMS as input and proposes new intrinsic goals (e.g., "explore X if curiosity high and X is unknown", "practice Y if competence low for Y").
+Integrate Drives into Planning/Action Selection:
+Allow HTNPlanner to use drive values as part of its heuristic for method selection (e.g., prefer methods that are novel if curiosity is high).
+If action selection involves choosing between multiple viable plans or actions, use drive states to bias the choice.
+Implement loss_repetition for Curiosity: Add logic to decrease curiosity if the agent detects it is performing repetitive actions or visiting already known states (this might involve input from LoopDetector or analyzing DynamicSelfModel's knowledge).
+More Complex Drive Interactions: Model interactions between drives (e.g., high frustration from low satisfaction might suppress curiosity).
+Emotional Link: Enhance ExperienceStream to allow drive states (especially satisfaction/frustration levels) to more directly influence the valence of the PhenomenalState.

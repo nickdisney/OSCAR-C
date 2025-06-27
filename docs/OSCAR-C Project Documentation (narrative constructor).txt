@@ -1,0 +1,114 @@
+OSCAR-C Project Documentation: cognitive_modules/narrative_constructor.py
+File Path: cognitive_modules/narrative_constructor.py
+Purpose and Role:
+The NarrativeConstructor (NC) component is responsible for creating and maintaining an autobiographical narrative for the OSCAR-C agent. It identifies "significant" events or state changes during the agent's operation and generates first-person textual entries to describe or reflect upon them. These entries aim to form a coherent story of the agent's "life" or experiences over time. This component plays a key role in enabling a rudimentary form of self-identity, memory integration, and providing a basis for future self-reflection. It often utilizes an LLM (Large Language Model) for generating human-like narrative text.
+Theoretical Basis / Cognitive Inspiration:
+Narrative Identity / Autobiographical Memory: This component is directly inspired by theories in psychology that emphasize the role of narrative in constructing a sense of self and organizing autobiographical memories (Bruner, 1991; McAdams, 2001; Conway & Pleydell-Pearce, 2000). Humans make sense of their experiences by weaving them into stories, which contributes to identity and continuity.
+Self-Awareness and Reflection: The act of narrating one's experiences can be a form of reflection. By generating entries, the agent is, in a sense, "commenting" on its own activities and internal states, which is a step towards higher-order awareness.
+Memory Consolidation and Meaning-Making: Narratives can help consolidate memories and imbue events with meaning by linking them to goals, emotions, and outcomes.
+Language and Thought: The use of an LLM to generate textual narratives touches upon the relationship between language and thought, where linguistic representation can shape and refine understanding.
+Implementation Details:
+Inheritance:
+class NarrativeConstructor(CognitiveComponent):
+Implements the CognitiveComponent protocol.
+NarrativeEntry Dataclass:
+Defines the structure for each entry in the narrative: timestamp, content (the textual narrative), triggering_event (summary of what caused the entry), phenomenal_state_summary, consciousness_level (name), and drive_state.
+Configuration: Loaded during initialize from the narrative_constructor section of config.toml.
+max_length: Maximum number of entries in the self.narrative deque.
+valence_change_threshold, intensity_threshold, drive_change_threshold, significance_threshold (general fallback): Thresholds used in _is_significant to determine if an event warrants narration.
+save_interval_s: How often to save the narrative to disk.
+llm_model_name, llm_temperature, llm_timeout_s: Parameters for LLM calls. llm_model_name prioritizes controller.model_name, then component config, then a hardcoded default. llm_timeout_s prioritizes component config, then global llm_settings.default_timeout_s.
+Narrative persistence path (narrative_log_path) is derived from agent_data_paths in the main config and agent_root_path.
+State Variables:
+narrative: Deque[NarrativeEntry]: A deque storing the sequence of narrative entries.
+_narrative_path: Optional[Path]: Path for saving/loading the narrative log.
+_last_save_time: float: Timestamp of the last save operation.
+_last_phenomenal_state: Optional['PhenomenalState']: Stores the PhenomenalState from the previous cycle for change detection.
+_last_drive_state: Optional[Dict[str, float]]: Stores the drive state from the previous relevant cycle.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters.
+Sets up _narrative_path and attempts to load an existing narrative log using _load_narrative().
+Initializes _last_drive_state by querying the EmergentMotivationSystem's status.
+async def _load_narrative(self); / async def save_narrative(self, force: bool = False);
+Handle loading and saving the self.narrative deque to/from a JSON Lines (.jsonl) file. save_narrative saves periodically or when forced, using a temporary file and os.replace for atomic writes. _load_narrative reconstructs NarrativeEntry objects from JSON.
+def _calculate_drive_shift(self, current_drives: Dict[str, float]) -> float;
+Calculates the sum of absolute changes between current_drives and self._last_drive_state.
+def _is_significant(self, current_phenomenal_state: Optional['PhenomenalState'], last_action_result: Dict[str, Any], loop_info: Optional[Dict[str, Any]], meta_analysis: Dict[str, Any], prediction_error: Optional[Dict[str, Any]], current_drives: Dict[str, float]) -> Tuple[bool, str, Dict[str, Any]];
+Determines if the current situation warrants a narrative entry.
+Triggers for Significance:
+Significant change in PhenomenalState.valence compared to _last_phenomenal_state.
+PhenomenalState.intensity exceeding self.intensity_threshold.
+Goal achievement or failure (status change of active_goal).
+Failure of a non-"THINKING" action.
+Success of specific "discovery" or "communication" actions (e.g., EXPLORE, READ_FILE, CALL_LLM, RESPOND_TO_USER).
+Detection of a loop_info.
+Detection of issues_detected by MetaCognitiveMonitor.
+Change in AgentController.consciousness_level.
+Presence of a prediction_error (from PredictiveWorldModel).
+drive_shift (calculated by _calculate_drive_shift) exceeding self.drive_change_threshold.
+Updates self._last_phenomenal_state and self._last_drive_state.
+Returns a tuple: (is_significant_bool, reason_string, event_summary_dict).
+async def generate_narrative_entry(self, phenomenal_state: Any, triggering_event: Dict[str, Any], reason: str) -> str;
+Generates the textual content for a narrative entry using an LLM.
+Prompt Engineering: Constructs a detailed prompt for the LLM, including:
+System prompt instructing the LLM to write a brief, reflective, first-person entry.
+Agent's current state: ConsciousnessLevel, current drive_state (from self._last_drive_state), and a summary of phenomenal_state (intensity, valence, integration, focus keys).
+Summary of the triggering_event and the reason string from _is_significant.
+Analysis hints if the trigger was a prediction error or drive shift.
+Snippets of the last few previous narrative entries for context.
+LLM Call: Calls the globally available call_ollama function (imported from external_comms) with the configured self.llm_model_name, self.llm_temperature, and self.llm_timeout_s. Requires self._controller._asyncio_loop.
+Fallback: If call_ollama is unavailable or returns an error, it includes a system note or a very basic template-based message in the narrative.
+Returns the generated (or fallback) string.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+The main entry point called by AgentController.
+Extracts phenomenal_state, last_action_result, loop_info, meta_analysis, and prediction_error from input_state.
+Retrieves current_drives by querying the status of EmergentMotivationSystem (via self._controller).
+Calls self._is_significant.
+If significant, calls self.generate_narrative_entry, creates a NarrativeEntry object, appends it to self.narrative, and calls self.save_narrative().
+async def reset(self) -> None;
+Clears the narrative deque and resets _last_phenomenal_state, _last_save_time, _last_drive_state.
+async def get_status(self) -> Dict[str, Any];
+Returns current narrative length, max length, timestamps, save path, and configured LLM model.
+Algorithms Used:
+Sliding Window Deque: For self.narrative.
+Threshold-Based Significance Detection: _is_significant uses multiple configured thresholds.
+LLM-Based Text Generation: Relies on an external LLM (via call_ollama) for core text generation.
+Prompt Engineering: The quality of generated narrative heavily depends on the structured prompt created in generate_narrative_entry.
+Relationship to Overall Project & Logic Flow:
+The NarrativeConstructor is Step 11 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via input_state to process):
+phenomenal_state: The current PhenomenalState from ExperienceStream.
+last_action_result: Outcome of the most recent action.
+loop_info: Information about detected loops from LoopDetector.
+meta_analysis: Output from MetaCognitiveMonitor.
+prediction_error: The last_prediction_error from PredictiveWorldModel.
+Implicitly accesses current drive states from EmergentMotivationSystem (via self._controller).
+Implicitly accesses current consciousness level from AgentController (via self._controller).
+Output: Primarily updates its internal self.narrative deque and saves to a file. Does not directly output data into the cycle for immediate use by the next step.
+Potential Future Consumers:
+MetaCognitiveMonitor: Could be enhanced to read and analyze the narrative log to detect long-term behavioral patterns, recurring emotional themes, or inconsistencies in self-reporting.
+DynamicSelfModel: The narrative could provide rich qualitative data for updating aspects of identity_traits or learned_concepts during reflection.
+HTNPlanner: Could potentially consult the narrative for past strategies or reflections related to current goals (very advanced).
+User Interface: The narrative log can be displayed to the user for understanding the agent's "inner monologue" or history.
+Current State of the Script:
+Functionality Implemented:
+Significance detection logic (_is_significant) considering multiple factors including prediction errors and drive shifts is functional.
+LLM integration via call_ollama for narrative text generation is implemented, including prompt construction.
+Fallback text generation for LLM errors.
+Narrative deque management and JSONL file persistence (load/save) are implemented, using the centralized path from agent_data_paths.
+Configuration of thresholds and LLM parameters.
+Alignment with Plans:
+The use of an LLM for generation aligns with plans.
+The enhanced significance checking (including prediction errors and drive shifts) represents progress towards a more context-aware narrative.
+The planned Phase II task "NarrativeConstructor - Store Narrative in KB" (asserting predicates summarizing narrative entries into KnowledgeBase) is not yet implemented in this component's process method.
+Known Limitations/Placeholders:
+LLM Dependency: Quality and speed are highly dependent on the external LLM and the quality of prompts.
+Narrative Coherence: Ensuring long-term coherence and consistency of the narrative is challenging with per-entry generation.
+No Internal Use: Currently, the generated narrative is primarily an output log; the agent itself does not yet actively use or reflect upon its own narrative content for decision-making or learning.
+Suggestions for Future Development/Refinement:
+Store Narrative Predicates in KB (Phase II): After generating a NarrativeEntry, create Predicate objects summarizing key aspects of the entry (e.g., narrativeTrigger(timestamp, trigger_type_summary), narrativeValence(timestamp, valence_value_from_pstate)) and assert them into the KnowledgeBase. This makes the narrative content queryable by other components.
+Improve Prompt Engineering: Continuously refine the prompts sent to the LLM for better quality, conciseness, and reflection of the agent's internal state.
+Thematic Analysis: Implement mechanisms (potentially LLM-based or NLP-based) to analyze the narrative log for recurring themes, emotional trends, or unresolved issues, which could feed into MetaCognitiveMonitor or DynamicSelfModel.
+Narrative Summarization: Periodically generate summaries of longer narrative periods.
+Truthfulness/Grounding: Explore ways to verify or ground the LLM-generated narrative content against factual predicates in the KnowledgeBase to mitigate LLM confabulation, especially if the narrative is to be used for internal reasoning.

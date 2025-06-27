@@ -1,0 +1,8 @@
+# --- START OF FILE VERSION.toml ---
+
+# OSCAR-C Version Information
+version = "2.0.0-dev"
+release_date = "" # Will be filled by release script
+codename = "Phoenix" # Example codename
+
+# --- END OF FILE VERSION.toml ---

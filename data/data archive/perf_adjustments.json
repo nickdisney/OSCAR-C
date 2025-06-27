@@ -1,0 +1,5 @@
+{
+  "loop_detection": {
+    "window_size": 2
+  }
+}

@@ -1,0 +1,74 @@
+OSCAR-C Project Documentation: scripts/kill_agent.py
+File Path: scripts/kill_agent.py
+Purpose and Role:
+The kill_agent.py script is an essential operational utility for the OSCAR-C project. Its primary purpose is to provide a reliable way to stop a running OSCAR-C agent process. It attempts a graceful shutdown first, allowing the agent to clean up resources, and then resorts to more forceful termination methods if the agent does not stop in a timely manner. This script is crucial for managing agent instances, especially during development, testing, or in deployment scenarios where an external mechanism to halt the agent is required.
+Theoretical Basis / Cognitive Inspiration:
+Not directly applicable in a cognitive sense. This script addresses operational requirements for managing a persistent software process. However, the concept of an "off-switch" or an external mechanism to halt an autonomous system is a fundamental aspect of AI safety and control.
+Implementation Details:
+Python Script: This is a Python-based alternative to a shell script (like a hypothetical kill_agent.sh), offering better cross-platform compatibility and more sophisticated process interaction through libraries.
+Dependencies:
+psutil: A cross-platform library for retrieving information on running processes and system utilization. It's used here to find the process by PID, send signals, check if it's running, and wait for termination.
+Standard Python libraries: os, sys, time, signal (for signal constants), logging, pathlib.
+Configuration Constants:
+PID_FILE_PATH: Path: The path to the PID file where the running agent stores its process ID. The script currently hardcodes this to /tmp/oscar_c.pid.
+Important Note: The AgentController's default PID file location is <project_root>/run/oscar_c.pid. For this script to work correctly with the default agent setup, PID_FILE_PATH here must be consistent with the agent's actual PID file location, or the agent's configuration must be changed to use /tmp/oscar_c.pid.
+AGENT_NAME: str: A human-readable name for logging purposes.
+WAIT_TIMEOUT_S: int: Seconds to wait for a graceful shutdown after sending SIGINT before escalating to forceful termination.
+LOG_LEVEL: Configures the logging verbosity for the script itself.
+Key Functions:
+read_pid_file(pid_path: Path) -> Optional[int];
+Reads the process ID (PID) from the specified pid_path.
+Handles FileNotFoundError, ValueError (if PID is not an integer), and ensures the PID is a positive value.
+Returns the integer PID or None if reading fails or the PID file is not found/valid.
+attempt_shutdown(pid: int) -> bool;
+This is the core shutdown logic.
+Process Discovery: Uses psutil.Process(pid) to get a handle to the target process.
+Graceful Shutdown (SIGINT):
+Sends signal.SIGINT to the process using proc.send_signal(signal.SIGINT). This is psutil's cross-platform way to send a signal equivalent to Ctrl+C, which the AgentController is configured to handle for graceful shutdown.
+Waits for up to WAIT_TIMEOUT_S seconds for the process to terminate using proc.wait(timeout=WAIT_TIMEOUT_S).
+If successful, returns True.
+Forceful Termination (if graceful fails):
+If psutil.TimeoutExpired occurs, it logs a warning.
+Calls proc.terminate() (sends SIGTERM on Unix, TerminateProcess on Windows). Waits briefly.
+If still running, calls proc.kill() (sends SIGKILL on Unix, stronger TerminateProcess on Windows). Waits briefly.
+Returns True if terminated at any forceful step, False if it could not be killed.
+Error Handling: Catches psutil.NoSuchProcess (if the process is already gone), psutil.AccessDenied (if script lacks permissions), and other exceptions.
+main();
+Orchestrates the script's execution.
+Calls read_pid_file() to get the agent's PID.
+If PID is found, calls attempt_shutdown().
+PID File Cleanup: If shutdown was successful AND the PID file exists AND psutil.pid_exists(pid) confirms the process is no longer running, it attempts to delete the PID file. This double-check is a good safety measure.
+Exits with status 0 on success, 1 on failure.
+Command-Line Execution (if __name__ == "__main__":):
+The script is designed to be run directly from the command line.
+Algorithms Used:
+Signal-Based Process Termination: Uses OS signals (SIGINT, SIGTERM, SIGKILL via psutil) to manage the target process lifecycle.
+Tiered Shutdown Strategy: Implements a common pattern: try graceful shutdown first, then escalate to more forceful methods if necessary.
+Relationship to Overall Project & Logic Flow:
+kill_agent.py is an external operational script, not part of the agent's internal cognitive cycle.
+Interaction with AgentController:
+It relies on the AgentController correctly writing its process ID to the PID_FILE_PATH upon startup and removing it upon clean shutdown.
+It interacts with the running AgentController process by sending signals (SIGINT) that the AgentController's signal handlers are designed to catch and process for a graceful stop.
+Use Cases:
+Manually stopping the agent from a terminal.
+Use in deployment scripts for stopping/restarting the agent.
+Emergency shutdown if the agent becomes unresponsive or misbehaves in a way that its internal stop mechanisms fail.
+Current State of the Script:
+Functionality Implemented:
+Reading PID from file.
+Attempting graceful shutdown with SIGINT.
+Escalating to terminate() and kill() if graceful shutdown fails.
+Waiting with timeouts.
+Cleaning up the PID file on successful termination.
+Robust error handling for various scenarios (file not found, process not found, permissions).
+Alignment with Plans: Fulfills the requirement for an "Emergency Kill-Switch Script" (Task 0.5 and 5.2 in setup_planning.py's task list). The Python version using psutil is more robust and cross-platform than a simple shell script.
+Known Limitations/Placeholders:
+PID File Path Mismatch: As noted above, the hardcoded PID_FILE_PATH = Path("/tmp/oscar_c.pid") is likely inconsistent with AgentController's default behavior of creating the PID file in a run/ subdirectory relative to config.toml. This needs to be harmonized for the script to work out-of-the-box with a default agent setup.
+Windows Signal Handling: While psutil attempts to abstract signal handling, sending SIGINT on Windows can sometimes behave differently than a direct Ctrl+C event in the console a Python process is attached to. However, AgentController using asyncio.loop.add_signal_handler for SIGINT should work correctly with psutil.send_signal.
+Suggestions for Future Development/Refinement:
+Harmonize PID_FILE_PATH:
+Option 1 (Recommended): Modify kill_agent.py to read the config.toml file (e.g., assuming a standard location like ../config.toml relative to the script, or by taking a config path as an argument). From the config, it would determine the agent_data_paths.pid_directory and agent.pid_file_name to construct the correct PID file path, mirroring how AgentController does it. This makes the script more robust to configuration changes.
+Option 2: Add a command-line argument to kill_agent.py to specify the PID file path directly.
+Option 3: Ensure config.toml consistently points pid_directory to /tmp if /tmp/oscar_c.pid is the desired fixed location.
+Configuration for Timeouts: Make WAIT_TIMEOUT_S and other internal timeouts configurable, perhaps via command-line arguments or by reading them from a small config file dedicated to the script itself (if it becomes more complex).
+Dry Run Mode: Add a --dry-run flag that would go through the motions (check PID file, find process) but not actually send any signals or delete the PID file, just report what it would do.

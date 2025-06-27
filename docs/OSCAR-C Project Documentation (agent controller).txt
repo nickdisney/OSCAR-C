@@ -1,0 +1,147 @@
+OSCAR-C Project Documentation: agent_controller.py
+File Path: agent_controller.py
+Purpose and Role:
+The AgentController is the central nervous system and orchestrator of the OSCAR-C agent. It is responsible for the overall lifecycle management of the agent (startup, execution, shutdown), the initialization and coordination of all individual cognitive components, and the sequential execution of the 12-step cognitive cycle. It manages the flow of data between these steps and components, handles user input, implements core action execution logic, and interfaces with error recovery and performance optimization mechanisms. Essentially, it embodies the agent's main control loop and integrates all cognitive functions into a cohesive operational whole.
+Theoretical Basis / Cognitive Inspiration:
+Cognitive Architectures (General): The AgentController implements the overarching structure of a cognitive architecture, which aims to define the fixed computational structures and processes that give rise to intelligent behavior (Laird, Newell, & Rosenbloom, 1987; Anderson, 1996; Sun, 2007).
+Central Executive / Control Processes: In many models of human cognition, a central executive or control system is posited to coordinate various cognitive subprocesses, manage working memory, and direct attention. The AgentController serves a similar role, though it's more explicitly sequential in OSCAR-C.
+Global Workspace Theory (GWT): While specific GWT mechanisms (attention, broadcast) are handled by dedicated components, the AgentController orchestrates the cycle that allows these mechanisms to function, facilitating the flow of information into and out of the conceptual global workspace.
+Cognitive Cycle Models: Many cognitive architectures (e.g., LIDA - Franklin et al., 2014; Soar) are based on a recurring cognitive cycle where perception, interpretation, decision-making, and action occur in a sequence. The 12-step loop implemented by AgentController is a specific instantiation of such a cycle.
+Implementation Details:
+Class Structure:
+class AgentController: (Does not inherit from CognitiveComponent itself, as it manages them).
+Includes CycleProfiler inner class for performance monitoring of cycle steps.
+Initialization (__init__):
+Takes ui_queue, model_name (for LLM calls), and config_path as arguments.
+Loads global configuration from config.toml using _load_config().
+Determines self.agent_root_path (parent directory of config.toml) which is crucial for resolving relative data paths.
+Sets up self.pid_file path based on agent_data_paths.pid_directory and agent.pid_file_name from config, resolved against agent_root_path.
+Initializes core state variables: active_goals, current_plan, current_phenomenal_state, agent_state, consciousness_level.
+Initializes _last_action_executed, _last_action_result, and last_prediction_error_for_attention.
+Sets up asyncio control flags (_is_running_flag, _main_loop_task, _user_input_queue).
+Instantiates CycleProfiler.
+Calls _initialize_components() to create instances of all cognitive modules specified in COMPONENT_INIT_ORDER_CTRL and component_classes map. These instances are stored in self.components and also made available as direct attributes (e.g., self.knowledge_base).
+Initializes default goal generation parameters (cooldown, min curiosity).
+Lifecycle Management:
+start(self);:
+Checks if agent is already running.
+Gets or creates an asyncio.AbstractEventLoop.
+Calls _add_signal_handlers() for SIGINT and SIGTERM.
+Sets _is_running_flag and creates _main_loop_task by scheduling _run_initialization_and_loop().
+If the loop is not already running (e.g., standalone execution), calls self._asyncio_loop.run_forever().
+stop(self, signum=None, frame=None);:
+Sets _is_running_flag to false.
+Cancels _main_loop_task.
+Schedules self._asyncio_loop.stop() to terminate the event loop.
+async def _run_initialization_and_loop(self);:
+Iterates through COMPONENT_INIT_ORDER_CTRL and calls the initialize(self.config, self) method of each component instance in self.components.
+If all initializations succeed, creates the PID file.
+Awaits _run_agent_loop().
+Includes a finally block to call _shutdown_components() and clean up the PID file.
+async def _shutdown_components(self, component_names: List[str]);:
+Calls the shutdown() method of each initialized component in reverse order.
+_add_signal_handlers(self); / _remove_signal_handlers(self);: Manage OS signal handling for graceful shutdown.
+_cleanup(self);: Performs final resource cleanup when the agent fully stops.
+Cognitive Cycle (async def _run_agent_loop(self);):
+This is the main operational loop, running while _is_running_flag is set.
+Each iteration represents one cognitive cycle and increments self.cycle_count.
+It sequentially executes the 12 steps (detailed below), using self.profiler to time each step.
+Manages the flow of key data between steps (e.g., raw_percepts, prediction_result, attention_weights, broadcast_content, self.current_phenomenal_state, meta_analysis, loop_info, action_result).
+Includes a main try...except block to catch errors within the cycle, log them, and invoke ErrorRecoverySystem.handle_error() followed by _oscar_handle_recovery().
+Controls cycle timing using asyncio.sleep() to attempt to meet config.performance.target_cycle_time.
+Handles updates to its own self.config based on PerformanceOptimizer feedback by checking self._config_updated_by_po_in_cycle (which is set if PO's status indicates active adjustments that are then merged).
+The 12-Step Cognitive Cycle Implementation (Simplified Flow):
+Perception & Prediction:
+A. _oscar_perceive(): Gathers raw_percepts (system stats from psutil, user input from _user_input_queue).
+B. predictive_world_model.process({"predict_request": ...}): Gets prediction_result for a potential next action (peeked using _oscar_peek_next_action()).
+Attention Allocation:
+_oscar_gather_attention_candidates(): Collects candidates from raw_percepts, active goals, last experience.
+attention_controller.process(...): Gets attention_weights. Inputs include last_gwm_content_for_novelty (from previous_cycle_gwm_content) and self.last_prediction_error_for_attention.
+Global Workspace:
+global_workspace.process(...): Gets broadcast_content. previous_cycle_gwm_content is updated.
+Experience Integration:
+_oscar_get_relevant_memories(), _oscar_get_current_action_context().
+experience_stream.process(...): Generates self.current_phenomenal_state.
+Consciousness Assessment:
+consciousness_assessor.process(...): Updates self.consciousness_level.
+Meta-Cognitive Monitoring:
+_oscar_get_cognitive_state().
+meta_cognition.process(...): Gets meta_analysis.
+Loop Detection & Intervention:
+loop_detector.process(...): Gets loop_info. If loop, calls _oscar_handle_loop() and continues to next cycle.
+Planning & Goal Management:
+Handles user input from broadcast_content by calling _map_text_to_goal(). If a new user goal is created, it's added to self.active_goals.
+_oscar_generate_or_select_goal(): Selects/generates active_goal.
+htn_planner.plan(active_goal, kb_state): Generates self.current_plan. (KB state fetched via knowledge_base.query_state).
+Action Selection & Execution:
+_oscar_select_next_action(): Selects next_action from self.current_plan.
+_oscar_execute_action(): Executes next_action, gets action_result. Updates _last_action_executed, _last_action_result.
+Model Updates & Goal Status:
+Updates self.current_plan (removes successful action or clears plan on failure).
+Updates active_goal.status to ACHIEVED or FAILED based on plan completion or action failure.
+If a non-default goal is ACHIEVED, resets _last_default_observe_completion_cycle to 0. If the default "Observe and learn" goal is achieved, sets cooldown.
+Removes ACHIEVED/FAILED goals from self.active_goals.
+Calls process methods of predictive_world_model (with prediction and actual result), dynamic_self_model (with action context), and emergent_motivation_system. PWM.process output updates self.last_prediction_error_for_attention.
+Narrative Update:
+narrative_constructor.process(...): Input includes current_cycle_prediction_error_for_pwm_update (which is the self.last_prediction_error_for_attention set in step 10).
+Performance Optimization:
+performance_optimizer.process(...): Gets optimization_analysis.
+If PO suggests recovery, calls _oscar_handle_recovery().
+Checks PO status for active_config_adjustments and merges them into self.config, setting self._config_updated_by_po_in_cycle.
+Helper Methods (_oscar_...):
+Many helpers prepare data for component calls or implement sub-logic for cycle steps.
+_oscar_execute_action(self, action: Dict[str, Any]) -> Dict[str, Any];: This is a large method containing the direct implementation for various action types:
+THINKING: Simple success.
+QUERY_KB: Calls self.knowledge_base.query().
+OBSERVE_SYSTEM: Uses psutil if available.
+LIST_FILES, READ_FILE, WRITE_FILE: Perform filesystem operations. These crucially use self.agent_root_path as the base for resolving relative paths and include security checks to prevent path traversal outside this root. They also read filesystem config (e.g., max_read_chars, allow_file_write) from self.config (which can be dynamically updated by PO). Path validity predicates are asserted into KB on success/failure. READ_FILE returns file_size_category.
+CALL_LLM: Uses external_comms.call_ollama().
+RESPOND_TO_USER: Uses call_ollama to formulate a conversational response and sends it to UI via _log_to_ui("agent", ...).
+GET_AGENT_STATUS, EXPLAIN_GOAL: Provide information to the UI.
+Asserts eventOccurred and actionFailed predicates into KB.
+_map_text_to_goal(self, user_text: str) -> Optional['Goal']; (async) and _map_text_to_goal_via_llm(self, user_text: str) -> Optional[str]; (async):
+_map_text_to_goal: Tries regex/keyword mapping first. If fails and input is not trivial, calls _map_text_to_goal_via_llm. If still no specific mapping, defaults to a generic "respond to user : <text>" goal. User-mapped goals get USER_GOAL_PRIORITY.
+_map_text_to_goal_via_llm: Constructs a detailed prompt for call_ollama with known agent tasks, asking the LLM to parse user text into a task name and parameters (JSON format). Parses the LLM's JSON response to reconstruct a goal description string.
+_oscar_generate_or_select_goal(self) -> Optional['Goal']; (async): Core goal selection logic. Sorts self.active_goals by priority (desc) then creation time (asc). Selects the first ACTIVE goal. If none, attempts to generate the default "Observe and learn" goal if cooldown conditions (cycles since last completion, emergent_motivation_system.drives.curiosity.value) are met.
+_oscar_get_active_goal(self) -> Optional['Goal'];: Selects the highest priority ACTIVE goal. If none, reactivates the highest priority SUSPENDED goal.
+_oscar_handle_recovery(self, recovery_mode: 'RecoveryMode'); (async): Implements actions for different RecoveryModes (clearing cache, resetting components, suspending goals).
+UI Communication: _log_to_ui, _update_ui_state (for agent's overall AgentState), _oscar_send_throttled_ui_updates (sends detailed telemetry like CS level, workspace load, drives, active goal to UI queue).
+User Input Handling:
+handle_user_input(self, text: str): Places user input text onto self._user_input_queue.
+_oscar_perceive(): Retrieves input from this queue.
+User input in broadcast_content (if it makes it there via attention) triggers _map_text_to_goal() in planning step.
+Algorithms Used:
+Sequential Control Flow: The 12-step cycle itself.
+Priority-Based Goal Selection: In _oscar_get_active_goal and _oscar_generate_or_select_goal.
+Regex and LLM-based Intent Parsing: In _map_text_to_goal and _map_text_to_goal_via_llm.
+Filesystem Path Resolution and Security: In _oscar_execute_action for file operations.
+Basic Cooldown Logic: For default goal generation.
+Relationship to Overall Project & Logic Flow:
+The AgentController is the absolute center of OSCAR-C. It defines the "main thread" of cognition and dictates how and when all other cognitive components are engaged. It manages the primary data flow objects (like current_phenomenal_state, active_goals, current_plan) that are passed between components or used as context.
+Current State of the Script:
+Functionality Implemented:
+Full 12-step cognitive cycle orchestration.
+Lifecycle management (start, stop, init, shutdown).
+Dynamic component initialization and access.
+Robust action execution for several key types, including secure file operations relative to agent_root_path and dynamic config reading for these actions.
+Sophisticated goal handling: user input mapping (regex + LLM fallback), default goal generation with cooldown and curiosity check, prioritization.
+Integration points for all planned cognitive components are present.
+Dynamic updating of self.config based on PerformanceOptimizer feedback.
+Feedback loops are established (e.g., PWM error -> Attention/EMS, Goal completion -> EMS).
+Alignment with Plans:
+Implements "CWD Management Standardization" (Phase I) by consistently using self.agent_root_path for file ops.
+Implements "Configuration Centralization" (Phase I) by loading from config.toml.
+Implements "PerformanceOptimizer - Dynamic Adjustment Feedback Loop" (Phase II) by reading PO adjustments.
+Implements "Improved User Goal Handling" (Phase II) with LLM fallback and cooldown reset.
+Contains integration points for "Refined ConsciousState Feedback Loops" (Phase II) and "ValueSystem Integration" (Phase III), though the internal logic using these extensively is still developing.
+Known Limitations/Placeholders:
+_oscar_get_relevant_memories(): Still a placeholder.
+Value System integration is structurally present (calls planned in comments/placeholders in some plan versions) but the ValueSystem component itself and the controller's reaction to its evaluation are not fully coded.
+Refined ConsciousState feedback loops (e.g., HTNPlanner altering depth based on low CS) are mostly conceptual placeholders in the controller's logic, awaiting deeper component-side support or more explicit controller logic.
+Suggestions for Future Development/Refinement:
+Refactor _run_agent_loop(): Further break down the 12 steps into more focused private helper methods to improve readability and maintainability of the main loop.
+Implement _oscar_get_relevant_memories(): Integrate with KnowledgeBase (and potentially a future vector DB via external_comms) for semantic or context-based memory retrieval to enrich ExperienceStream.
+Value System Integration (Phase III): Fully implement the calls to a ValueSystem component (at Step 8 for plan evaluation, Step 9 for action evaluation) and the controller's logic to react to the ValueSystem's judgments (e.g., aborting unsafe plans/actions).
+Deeper ConsciousState Feedback Loops (Phase II/III): Implement more explicit logic where self.consciousness_level directly modulates parameters or behaviors of components like HTNPlanner, MetaCognitiveMonitor, or EmergentMotivationSystem, beyond just passing the level as context.
+More Sophisticated Goal Management: Consider a dedicated GoalManager component or more advanced logic within AgentController for handling conflicting goals, sub-goal dependencies beyond simple lists, and opportunistic goal pursuit.
+Asynchronous Action Execution: For long-running actions in _oscar_execute_action (like complex LLM calls or slow I/O), ensure they are truly non-blocking and consider mechanisms for the agent to "check back" on their status or continue other cognitive processing if appropriate, rather than a simple await.

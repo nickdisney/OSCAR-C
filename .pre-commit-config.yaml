@@ -1,0 +1,60 @@
+# --- START OF FILE .pre-commit-config.yaml ---
+
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+
+# Define default stages (can be overridden per hook)
+# default_stages: [commit]
+
+# Minimum pre-commit version requirement (optional)
+# minimum_pre_commit_version: '2.9.2'
+
+repos:
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0 # Use a recent version
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  # Python Formatting - Black
+  - repo: https://github.com/psf/black
+    rev: 24.4.2 # Use a recent version
+    hooks:
+      - id: black
+        language_version: python3.11 # Specify your target Python version
+
+  # Python Linting & Fixing - Ruff
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # rev: v0.4.4 # Use a recent version (Specify if needed)
+    rev: v0.4.9 # Use a recent version
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix] # Auto-fix issues
+      # Optional: Separate formatter check if you prefer Black only for formatting
+      # - id: ruff-format # Not needed if using Black
+
+  # Static Typing - MyPy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0 # Use a recent version
+    hooks:
+      - id: mypy
+        args: [--strict, --ignore-missing-imports] # Strict checking, ignore missing stubs for external libs
+        # `exclude` can be useful if some files aren't ready for strict typing yet
+        # exclude: ^(scripts/|tests/unit/legacy_code/)
+        additional_dependencies: [types-toml] # Add if using MyPy with toml files
+
+  # Security Analysis - Bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.9 # Use a recent version
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"] # Configure bandit via pyproject.toml if desired
+        # Exclude tests if they contain intentional "insecure" patterns for testing
+        exclude: ^tests/
+
+# --- END OF FILE .pre-commit-config.yaml ---

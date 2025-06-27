@@ -1,0 +1,110 @@
+OSCAR-C Project Documentation: cognitive_modules/experience_stream.py
+File Path: cognitive_modules/experience_stream.py
+Purpose and Role:
+The ExperienceStream component is responsible for constructing a unified representation of the agent's "conscious experience" for each cognitive cycle. It achieves this by integrating various streams of information: the broadcast_content from the GlobalWorkspaceManager (which forms the core attentional focus), raw percepts, relevant memories, and the current context (such as the outcome of the last action). The output of this integration is a PhenomenalState object, which aims to capture "what it is like" for the agent at that moment. A key function of this component is also the calculation of several sub-metrics (e.g., for information diversity and source distinctness) that serve as inputs for the ConsciousnessLevelAssessor's Φ-Proxy calculation.
+Theoretical Basis / Cognitive Inspiration:
+Binding Problem & Unity of Consciousness: A central question in consciousness studies is how disparate pieces of information processed by different brain areas are bound together into a single, unified conscious experience. The ExperienceStream attempts to model this binding process computationally by merging various inputs into the PhenomenalState.
+Global Workspace Theory (GWT): While the GlobalWorkspaceManager handles the selection and broadcast of conscious content, the ExperienceStream can be seen as modeling how this broadcast content is further elaborated and contextualized by interacting with other cognitive systems (like memory and ongoing situational context) to form a richer subjective experience (Baars, 1988).
+Integrated Information Theory (IIT): This component is crucial for operationalizing IIT-inspired proxies. It calculates sub-metrics related to differentiation (diversity of content and sources) and integration (shared concepts) within the current informational landscape. These metrics (distinct_source_count, content_diversity_lexical, shared_concept_count_gw) are then used by the ConsciousnessLevelAssessor (Tononi, 2004; Oizumi, Albantakis, & Tononi, 2014).
+Situated Cognition / Contextualization: Conscious experience is not context-free. The ExperienceStream's inclusion of action_context and relevant_memories reflects the idea that current experience is always interpreted in light of what just happened and what is known from the past.
+Affective Coloring of Experience: The calculation and inclusion of valence in the PhenomenalState acknowledges that emotions and feelings are integral aspects of subjective experience and can modulate cognitive processing (Damasio, 1994, on somatic markers).
+Implementation Details:
+Inheritance:
+class ExperienceStream(ExperienceIntegrator):
+Implements the ExperienceIntegrator protocol (and by extension, CognitiveComponent).
+Configuration: Loaded during initialize from the experience_stream section of config.toml.
+_intensity_factor: float: A factor scaling how much workspace content contributes to the overall intensity of the experience.
+_valence_decay: float: Rate at which the internal _current_valence returns towards neutral (0.0).
+custom_stopwords: List[str]: A list of custom stopwords to be added to DEFAULT_STOPWORDS for lexical diversity and shared concept calculations.
+State Variables:
+_current_valence: float: Internal state tracking the agent's emotional valence, updated each cycle.
+_stopwords: Set[str]: The combined set of default and custom stopwords.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters and initializes _stopwords.
+async def integrate_experience(self, percepts: Dict[str, Any], memories: List[Any], context: Dict[str, Any], broadcast_content: Dict[str, Any]) -> 'PhenomenalState';
+This is the core method.
+Content Aggregation & Source Identification:
+Initializes integrated_content by copying broadcast_content.
+Adds specific percepts (e.g., user_input, internal_error, system_state) to integrated_content under distinct keys.
+Adds summaries of relevant memories (up to 3) to integrated_content.
+Adds action_context (from the input context dictionary) to integrated_content.
+Identifies distinct source_types_present by examining prefixes of keys in broadcast_content (e.g., "percept_", "goal_") and by tracking the explicit addition of "user_input_percept_source", "internal_error_percept_source", "system_state_percept_source", "retrieved_memory_source", and "action_context_source". The count of these unique types becomes distinct_source_count.
+Intensity Calculation:
+Calculates focus_intensity based on the sum of workspace_weights (if accessible via self._controller.global_workspace.workspace_weights) or, as a fallback, the number of items in broadcast_content.
+Normalizes focus_intensity by workspace_capacity (from self._controller.global_workspace.capacity or a default) and scales it by self._intensity_factor to get the final intensity.
+Valence Calculation:
+Applies decay to self._current_valence.
+Shifts self._current_valence based on last_action_outcome from the context (positive for "success", negative for "failure") and if internal_error percepts are present (negative shift).
+Clamps the final valence between -1.0 and 1.0.
+Old Integration Level Proxy Calculation:
+integration_level_old_proxy = min(1.0, distinct_source_count / 4.0). This value is still calculated and stored in PhenomenalState.integration_level.
+Attention Weight Placeholder:
+attention_weight = intensity. (The salience of the experience itself is tied to its intensity).
+Φ-Proxy Sub-metric Calculations:
+content_diversity_lexical (Type-Token Ratio - TTR):
+Collects all string values from integrated_content (from broadcast_content, added percepts, memory summaries, context descriptions).
+Concatenates these strings, converts to lowercase.
+Tokenizes the full text into words using re.findall(r'\b\w+\b', ...).
+Filters out words present in self._stopwords.
+Calculates TTR: len(unique_words) / len(words). Returns 0.0 if no words.
+shared_concept_count_gw:
+Specifically processes only the broadcast_content.
+For each item in broadcast_content, extracts textual content (from direct string value or common dictionary keys like "content", "description").
+Tokenizes and filters stopwords for each item's text, creating a list of sets of words (item_contents_tokenized).
+If more than one item has textual content:
+Calculates the union of all word sets (all_words_in_gw).
+Uses collections.Counter to count occurrences of each word across all items.
+Counts how many words (shared_words_count) appear in more than one item's content.
+Normalizes: shared_words_count / len(all_words_in_gw). Returns 0.0 if no words or only one item.
+PhenomenalState Creation:
+Instantiates a PhenomenalState object using the aggregated content and all calculated properties (intensity, valence, old integration_level, attention_weight, timestamp, and the new sub-metrics: distinct_source_count, content_diversity_lexical, shared_concept_count_gw).
+Includes a fallback to create a dictionary if the PhenomenalState class reference (self._PhenomenalStateClass) is not available.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+The main entry point. Extracts percepts, memories, context, and broadcast_content from input_state.
+Calls self.integrate_experience() with these inputs.
+Returns {"phenomenal_state": phenomenal_state_result}.
+async def reset(self) -> None;
+Resets self._current_valence to 0.0.
+async def get_status(self) -> Dict[str, Any];
+Returns current _current_valence and configured factors.
+Algorithms Used:
+Content Aggregation: Merging dictionaries and lists from various sources.
+Source Type Counting: Iterating through keys and identifying predefined patterns or explicit source markers.
+Exponential Decay Model: For _current_valence.
+Type-Token Ratio (TTR): For content_diversity_lexical. Involves tokenization (re.findall), stopword filtering, and set operations for unique word counting.
+Shared Concept Counting: For shared_concept_count_gw. Involves tokenization, stopword filtering, set operations (union), and frequency counting (collections.Counter) to identify words appearing in multiple broadcast items.
+Relationship to Overall Project & Logic Flow:
+The ExperienceStream is Step 4 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController):
+percepts: Raw percepts from _oscar_perceive.
+memories: Relevant memories retrieved by _oscar_get_relevant_memories.
+context: Current action context from _oscar_get_current_action_context.
+broadcast_content: The content selected by GlobalWorkspaceManager.
+Output (to AgentController):
+{"phenomenal_state": PhenomenalState_object_or_dict}: The unified representation of the agent's current experience, including the crucial Φ-Proxy sub-metrics.
+Downstream Consumers:
+ConsciousnessLevelAssessor (Step 5): The generated PhenomenalState (specifically its sub-metrics: distinct_source_count, content_diversity_lexical, shared_concept_count_gw, and potentially intensity/valence) is the primary input for assessing the agent's consciousness level and calculating the phi_proxy_score.
+NarrativeConstructor (Step 11): Uses PhenomenalState (intensity, valence, content) to determine event significance and to color the tone and content of narrative entries.
+DynamicSelfModel (Step 10): May use PhenomenalState (e.g., valence, intensity) to update aspects of its internal_state_awareness.
+MetaCognitiveMonitor (Step 6): The AgentController might include parts of the PhenomenalState (like valence or integration level) in the cognitive_state passed to the monitor.
+Current State of the Script:
+Functionality Implemented:
+The core logic for integrating content from various sources into PhenomenalState.content is functional.
+Calculations for intensity, valence, and the older integration_level proxy are implemented.
+Crucially, the calculations for the new Φ-Proxy sub-metrics (distinct_source_count, content_diversity_lexical, shared_concept_count_gw) are implemented as per the plans.
+Stopword handling (default + custom) for lexical metrics is included.
+Alignment with Plans: This component is directly responsible for and successfully implements the "ExperienceStream - Φ-Proxy Sub-Metrics" task from Phase I of the development checklist. The logic aligns with the descriptions in on phi.txt for calculating these sub-metrics.
+Known Limitations/Placeholders:
+Source Identification: The distinct_source_count relies on specific key prefixes in broadcast_content and explicitly named input categories. If new, un-prefixed sources are added to broadcast_content, they might not be counted unless the logic is updated.
+Text Extraction for Diversity/Shared Concepts: The current text extraction for content_diversity_lexical and shared_concept_count_gw looks for strings directly or within common dictionary keys (content, description, text). It might miss textual data in more deeply nested or unusually structured content items within integrated_content or broadcast_content.
+Semantic Richness: Lexical diversity (TTR) and keyword sharing are syntactic/lexical measures. They do not capture deeper semantic diversity or coherence (e.g., "big dog" and "large canine" are lexically different but semantically similar). The "semantic_coherence_gw" mentioned in on phi.txt is not yet implemented.
+Suggestions for Future Development/Refinement:
+Refine Source Identification: Make the source identification for distinct_source_count more robust, perhaps by requiring attention candidates to explicitly declare their source type metadata, which ExperienceStream can then aggregate.
+Improve Text Extraction: Enhance the heuristics for extracting all relevant textual content from integrated_content and broadcast_content for more accurate lexical metrics. This might involve recursive traversal of nested data structures.
+Implement Semantic Coherence: As a significant future step (Phase 2/3), implement semantic_coherence_gw. This would likely involve:
+Generating sentence embeddings for textual items in broadcast_content (using a local sentence transformer model via external_comms).
+Calculating average pairwise cosine similarity of these embeddings. A tighter cluster (higher average similarity) would indicate higher semantic coherence.
+This would require adding a semantic_coherence_gw: float field to PhenomenalState.
+Information Type Diversity: Implement information_type_diversity (as mentioned in on phi.txt). This would require items in the workspace to have explicit info_type tags (e.g., "percept_visual", "goal_abstract"), and ExperienceStream would count the unique tags.
+Temporal Integration (Specious Present): Consider how PhenomenalState might represent a brief temporal window rather than just an instant, perhaps by lightly integrating content from the immediately preceding state(s) in a more structured way.

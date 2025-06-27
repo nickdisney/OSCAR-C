@@ -1,0 +1,53 @@
+OSCAR-C Project Documentation: scripts/setup_planning.py
+File Path: scripts/setup_planning.py
+Purpose and Role:
+The setup_planning.py script is a simple utility designed to automatically generate or overwrite a markdown file named PLANNING.md in the project's root directory. This markdown file contains a checklist of development tasks, organized by phases, derived from a hardcoded list within the script itself. Its purpose is to provide a straightforward way to initialize or update a high-level task tracking document that developers can use to monitor project progress.
+Theoretical Basis / Cognitive Inspiration:
+Not applicable. This is a project management and development workflow utility. It aids the developers' cognition by providing a structured task list.
+Implementation Details:
+Hardcoded TASKS List:
+The core of the script is a global list named TASKS.
+Each element in this list is a string representing a task, prefixed with "☐ " to create a markdown checkbox.
+Tasks are implicitly grouped by "phases" using a numerical prefix (e.g., "0.1", "1.1") or categorical prefixes like "CM:" (Cognitive Module Implementation) and "FI:" (Final Integration).
+The current TASKS list in the provided file includes high-level items covering project setup, foundational elements, infrastructure, controller/migration, testing, dashboard, documentation/release, specific cognitive module implementations, and final integration.
+create_planning_md(output_filename="PLANNING.md") function:
+Path Resolution: Determines the output path for PLANNING.md by finding the script's directory, then going up one level to the project root, and joining with output_filename.
+File Generation:
+Opens the output_path in write mode ("w"), which overwrites the file if it exists.
+Writes a main title and a generator notice.
+Iterates through the TASKS list:
+Phase Heading Logic: It attempts to detect phase changes by looking at the prefix of the task string (e.g., the "0" from "0.1", or "CM" from "☐ CM:").
+If a new phase marker is detected, it writes a markdown heading (e.g., ## Phase 0: Bootstrap & Foundations). It includes specific titles for numeric phases (0-7) and generic titles for "CM" and "FI" phases.
+It then writes the task string (which includes the "☐ ") as a new line.
+Error Handling: Includes a try-except IOError and a generic Exception block to catch issues during file writing and print error messages.
+Command-Line Execution (if __name__ == "__main__":):
+Allows the script to be run directly (e.g., python scripts/setup_planning.py).
+When run, it calls create_planning_md().
+Algorithms Used:
+String Parsing: Basic string splitting and prefix checking to identify phase markers within the task strings.
+List Iteration and File Writing: Standard iteration through the TASKS list and writing lines to a file.
+Relationship to Overall Project & Logic Flow:
+setup_planning.py is a standalone development utility.
+Not Part of Agent Runtime: It does not interact with the OSCAR-C agent itself or its cognitive cycle.
+Development Workflow: It's intended to be run by developers to initialize or regenerate the PLANNING.md file. This file then serves as a manual checklist for tracking development progress against a predefined set of high-level tasks.
+Source of Truth for PLANNING.md: The TASKS list within this script is the single source of truth for the content of PLANNING.md.
+Current State of the Script:
+Functionality Implemented:
+Generates a PLANNING.md file in the project root.
+Populates it with checkboxes and phase headings based on the internal TASKS list.
+Path resolution to place PLANNING.md in the project root (assuming the script is in a scripts/ subdirectory) is correct.
+Alignment with Plans:
+Fulfills "Planning Ledger Initialization" (Task 0.2 in its own generated TASKS list).
+The TASKS list itself is a summary that seems inspired by the more detailed oscar-c development checklist.txt and other planning documents, but it's a distinct, simplified representation.
+Known Limitations/Placeholders:
+Static Task List: The primary limitation is that the TASKS list is hardcoded within the script. If the project's actual development plan (e.g., as detailed in oscar-c development checklist.txt or other evolving documents) changes, the TASKS list in this script must be manually updated to keep PLANNING.md synchronized. There's no mechanism to automatically derive tasks from other planning documents.
+Simple Phase Detection: The phase heading generation relies on simple string prefixes. If task naming conventions change significantly, this logic might break or produce incorrect headings.
+No State Preservation: Running the script always overwrites PLANNING.md, so any manual check-offs (changing "☐" to "☒") in the markdown file would be lost.
+Suggestions for Future Development/Refinement:
+Dynamic Task List Generation (Advanced):
+Instead of a hardcoded list, modify the script to parse a more structured planning document (e.g., if oscar-c development checklist.txt were in a machine-readable format like YAML or JSON, or even a specially formatted markdown that the script could parse). This would make PLANNING.md automatically reflect the primary plan. This is a significant increase in complexity.
+Preserve Checkbox State (Advanced):
+If PLANNING.md already exists, read its content.
+When generating the new version, try to match tasks from the TASKS list with tasks in the old file and preserve their checkbox state (checked or unchecked). This would prevent developers from losing their progress tracking when the script is re-run. This would require more sophisticated parsing of the existing markdown file.
+More Flexible Output: Allow specifying the output file name or path via a command-line argument.
+Integration with Task Management Systems: For larger projects, consider generating tasks that can be imported into dedicated task management tools (e.g., Jira, Trello, GitHub Issues) rather than just a markdown file.

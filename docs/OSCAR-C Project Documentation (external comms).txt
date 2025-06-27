@@ -1,0 +1,88 @@
+OSCAR-C Project Documentation: external_comms.py
+File Path: external_comms.py
+Purpose and Role:
+The external_comms.py script provides a centralized module for handling OSCAR-C's interactions with external services or libraries that are not part of its core cognitive components. Currently, this primarily includes making calls to Ollama for Large Language Model (LLM) functionalities and potentially interacting with a ChromaDB vector database for semantic memory operations. The purpose is to encapsulate these external dependencies, manage their specific API interactions, and provide a consistent interface for other OSCAR-C components (like AgentController, NarrativeConstructor) to use these services.
+Theoretical Basis / Cognitive Inspiration:
+Modularity and Abstraction: Encapsulating external service calls isolates dependencies. If, for example, a different LLM provider were to be used in the future, changes would ideally be localized to this module.
+Access to External Knowledge/Capabilities: LLMs provide access to vast amounts of pre-trained knowledge and sophisticated text generation/understanding capabilities that are beyond what OSCAR-C's internal symbolic reasoning might achieve alone. This is akin to a human consulting external resources or leveraging learned linguistic skills.
+Semantic Memory (Future): The ChromaDB functions lay the groundwork for implementing a semantic memory, where information is stored and retrieved based on meaning (vector similarity) rather than just keywords. This is closer to how human associative memory works.
+Implementation Details:
+Conditional Imports:
+import ollama: Imported with a fallback and OLLAMA_AVAILABLE flag.
+import chromadb: Imported with a fallback and CHROMADB_AVAILABLE flag.
+Logging is used to indicate if these libraries are missing.
+Configuration Access (Implicit):
+Functions like call_ollama and retrieve_from_memory rely on accessing configuration parameters (e.g., OLLAMA_CALL_TIMEOUT_S, MEMORY_RETRIEVAL_COUNT). The current implementation uses _agent_config_ext = globals().get('agent_config') to attempt to get these from a globally available agent_config object (which is how constants were managed in earlier versions). This should ideally be refactored to take config dictionaries as arguments for better encapsulation.
+Key Functions:
+async def call_ollama(selected_ollama_model: str, messages: List[Dict[str, str]], temperature: float, loop: Optional[asyncio.AbstractEventLoop], timeout: Optional[float] = None) -> Tuple[str | None, str | None];
+Purpose: Makes an asynchronous call to the Ollama chat API.
+Parameters:
+selected_ollama_model: Name of the Ollama model to use.
+messages: List of message dictionaries (e.g., [{"role": "system", "content": ...}, {"role": "user", "content": ...}]).
+temperature: Temperature for LLM generation.
+loop: The asyncio event loop to run the synchronous Ollama call in an executor.
+timeout: Optional call timeout in seconds (defaults to agent_config.OLLAMA_CALL_TIMEOUT_S or 180.0).
+Logic:
+Checks if OLLAMA_AVAILABLE and if the loop is valid and running.
+Defines a synchronous lambda sync_call that calls ollama.chat().
+Uses await asyncio.wait_for(loop.run_in_executor(None, sync_call), timeout=timeout) to execute the blocking Ollama library call in a separate thread without blocking the agent's main event loop.
+Response Parsing: Robustly parses the response from ollama.chat(). It checks for typical dictionary structures (response['message']['content']) and also attempts to handle Pydantic-like object structures (response.message.content) as a fallback. A final fallback attempts str(response).
+Error Handling: Catches asyncio.TimeoutError, RuntimeError (specifically for executor shutdown scenarios), and generic Exception. Provides specific error messages for common issues like connection refused or model not found by parsing the exception string.
+Returns: A tuple (content_string | None, error_string | None).
+async def add_document_to_memory(memory_collection: Optional[Any], loop: Optional[asyncio.AbstractEventLoop], text: str, metadata: Dict[str, Any], is_running_flag: Optional[threading.Event]);
+Purpose: Adds a document (text and metadata) to a ChromaDB memory collection.
+Parameters:
+memory_collection: The ChromaDB collection object (typed as Any for now).
+loop: The asyncio event loop.
+text: The document content.
+metadata: A dictionary of metadata for the document.
+is_running_flag: An optional threading.Event to check if the agent is still running before performing the operation.
+Logic:
+Checks for CHROMADB_AVAILABLE, valid memory_collection, text, is_running_flag, and loop.
+Metadata Sanitization: Creates safe_metadata by filtering the input metadata to include only basic types (str, int, float, bool) to ensure compatibility with ChromaDB. Logs a debug message for skipped keys.
+Ensures timestamp and type exist in safe_metadata (adds defaults if not).
+Generates a robust document doc_id using type, timestamp, and a random number.
+Defines a synchronous lambda add_func that calls memory_collection.add().
+Uses await loop.run_in_executor(None, add_func) to execute.
+Handles RuntimeError (for executor shutdown) and generic Exception.
+async def retrieve_from_memory(memory_collection: Optional[Any], loop: Optional[asyncio.AbstractEventLoop], query_text: str, is_running_flag: Optional[threading.Event], n_results: int = 3) -> List[str];
+Purpose: Retrieves documents from a ChromaDB memory collection based on a query text.
+Parameters: Similar to add_document_to_memory, plus query_text and n_results (defaults from agent_config.MEMORY_RETRIEVAL_COUNT or 3).
+Logic:
+Checks for availability and running state similar to add_document_to_memory.
+Defines a synchronous lambda query_func that calls memory_collection.query(), requesting documents and metadata.
+Uses await loop.run_in_executor(None, query_func).
+Response Parsing: Safely extracts the list of document strings from the ChromaDB query result structure (which is typically a dictionary containing a list of lists for documents).
+Handles RuntimeError and generic Exception.
+Returns: A list of retrieved document strings.
+Algorithms Used:
+Asynchronous Execution of Synchronous Code: All functions use loop.run_in_executor to call synchronous library functions (ollama.chat, collection.add, collection.query) in a non-blocking way from an asyncio context.
+Error Message Parsing (Basic): call_ollama attempts to parse common error strings from the Ollama library to provide more user-friendly error feedback.
+Relationship to Overall Project & Logic Flow:
+This module serves as an abstraction layer for external service interactions.
+AgentController:
+Uses call_ollama (via self.model_name, self._asyncio_loop) in its _map_text_to_goal_via_llm helper for intent parsing and in _oscar_execute_action for the RESPOND_TO_USER action.
+Potentially passes memory_collection references (if a ChromaDB instance is managed by the controller or a dedicated memory component) and self._asyncio_loop to components that might use add_document_to_memory or retrieve_from_memory.
+NarrativeConstructor:
+Uses call_ollama (via self._controller._asyncio_loop and its own configured LLM parameters) in its generate_narrative_entry method to produce narrative text.
+Future Memory Components / ExperienceStream:
+The add_document_to_memory and retrieve_from_memory functions are intended for use by a future, more advanced semantic memory system. ExperienceStream's _oscar_get_relevant_memories (currently a placeholder in AgentController) would be a prime candidate to use retrieve_from_memory if OSCAR-C implements a ChromaDB-backed episodic or semantic long-term memory.
+Current State of the Script:
+Functionality Implemented:
+call_ollama is robustly implemented with asynchronous execution, timeout handling, and improved error parsing/reporting.
+Basic functions for adding to and retrieving from a ChromaDB collection (add_document_to_memory, retrieve_from_memory) are implemented with asynchronous execution and safety checks.
+Metadata sanitization is included for add_document_to_memory.
+Alignment with Plans: Provides the necessary functionality for LLM interaction required by various components (Controller, NarrativeConstructor). Lays the groundwork for future semantic memory capabilities (Phase IV "Memory Retrieval Enhancement").
+Known Limitations/Placeholders:
+Configuration Access: Relies on globals().get('agent_config') for some default parameters, which is not ideal for encapsulation. These should be passed as arguments or retrieved from a config dictionary passed to the functions or a class that might wrap them.
+ChromaDB Integration Simplicity: The ChromaDB functions assume a memory_collection object is already instantiated and passed in. They don't handle ChromaDB client initialization or collection creation/management. A dedicated SemanticMemory component would likely manage this.
+Type Hint for memory_collection: Typed as Optional[Any]. Using a Protocol for the expected ChromaDB collection interface would improve type safety if more complex interactions were needed.
+Suggestions for Future Development/Refinement:
+Configuration Management: Refactor functions to accept necessary configuration parameters (like timeouts, default model names, n_results for retrieval) as direct arguments or via a passed-in configuration dictionary, removing the reliance on a global agent_config.
+Dedicated Semantic Memory Component: If ChromaDB or a similar vector store becomes a core part of OSCAR-C's memory, create a dedicated SemanticMemory cognitive component. This component would:
+Manage the ChromaDB client and collection(s).
+Encapsulate add_document_to_memory and retrieve_from_memory (or similar methods).
+Implement more sophisticated logic for document chunking, embedding generation (perhaps using a local sentence transformer model), and query construction.
+Adhere to the CognitiveComponent protocol.
+Embedding Generation: For true semantic search, the text needs to be converted to embeddings before being added to ChromaDB, and query texts also need to be embedded. This logic is currently missing and would be a key part of a SemanticMemory component or an enhanced external_comms.
+Error Handling Granularity: For ChromaDB interactions, catch more specific ChromaDB exceptions if the library provides them, to give more targeted error feedback.

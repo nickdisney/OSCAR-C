@@ -1,0 +1,116 @@
+OSCAR-C Project Documentation: cognitive_modules/htn_planner.py
+File Path: cognitive_modules/htn_planner.py
+Purpose and Role:
+The HTNPlanner (Hierarchical Task Network Planner) is a core deliberative reasoning component in OSCAR-C. Its primary function is to take a high-level Goal (provided by the AgentController) and decompose it into a sequence of primitive, executable Operators (actions). It achieves this by applying Methods, which are predefined rules that break down complex tasks into simpler subtasks. This structured, knowledge-rich approach to planning allows the agent to pursue complex objectives in a more organized and human-understandable way than simple reactive systems or flat planners.
+Theoretical Basis / Cognitive Inspiration:
+Hierarchical Task Network (HTN) Planning: This component is a direct implementation of HTN planning principles (Erol, Hendler, & Nau, 1994; Ghallab, Nau, & Traverso, 2004). HTN planning mirrors human procedural reasoning, where complex tasks are often solved by breaking them into known sequences of sub-steps or by applying learned methods.
+Goal-Directed Behavior: HTN planning is inherently goal-directed. The planning process starts with a goal and works backward (or forward, depending on the HTN variant) through task decompositions until a sequence of primitive actions that achieve the goal is found.
+Procedural Knowledge: The Methods and Operators defined in the planner's library represent the agent's procedural knowledge – its "know-how" for accomplishing tasks.
+Means-Ends Analysis (Implicit): While not explicitly a means-ends analyzer, the process of selecting methods whose effects help achieve subgoals shares conceptual similarities with means-ends reasoning.
+Search and Heuristics: Finding a valid plan in HTN involves searching through possible decompositions. The implemented iterative deepening and heuristic method selection are standard AI techniques to manage search complexity (Russell & Norvig, 2020).
+Implementation Details:
+Inheritance:
+class HTNPlanner(Planner):
+Implements the Planner protocol (and by extension, CognitiveComponent).
+Core Data Structures:
+Operator (dataclass): Represents a primitive, executable action.
+Fields: name: str, parameters: List[str] (formal parameter names), preconditions: Set['Predicate'], effects: Set['Predicate'].
+Methods: _bind_predicate, is_applicable (checks preconditions against a state and bindings), apply (simulates operator effects on a state).
+Method (dataclass): Represents a task decomposition rule.
+Fields: name: str, task_signature: Tuple[str, ...] (e.g., ("task_name", "?var1"), defining the complex task it decomposes and its formal parameters), preconditions: Set['Predicate'] (conditions for the method to be applicable), subtasks: List[TaskType] (sequence of primitive operator names or complex task signatures).
+heuristic_score: Optional[float]: A score used to prioritize methods (lower is better). Default calculated in __post_init__ as len(subtasks) + len(preconditions) * 0.1.
+Methods: _bind_predicate, is_applicable, get_parameter_bindings (binds method signature parameters to concrete task arguments), bind_subtask (instantiates a subtask template with current bindings).
+Planner State:
+operators: Dict[str, Operator]: Stores defined primitive operators, keyed by name.
+methods: Dict[str, List[Method]]: Stores methods, keyed by the name of the complex task they decompose. A task can have multiple decomposition methods.
+max_depth: int: Maximum recursion depth for decomposition, dynamically updated from AgentController.config at the start of each plan call.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Sets initial max_depth from the performance.max_planning_depth value in the provided config.
+Calls _define_example_plan_library() to populate self.operators and self.methods with a hardcoded set of basic actions and decomposition rules.
+Stores references to Goal and Predicate classes obtained via globals().get().
+_define_example_plan_library(self);
+Hardcodes a small library of Operators (THINKING, QUERY_KB, OBSERVE_SYSTEM, LIST_FILES, READ_FILE, RESPOND_TO_USER, GET_AGENT_STATUS, EXPLAIN_GOAL) and Methods (task_observe_and_learn, task_explore_directory, task_read_file, task_respond_simple, etc.).
+These definitions include parameters, preconditions, effects, and subtask sequences, using variable placeholders (e.g., ?filepath).
+async def plan(self, goal: 'Goal', current_state: Set['Predicate']) -> Optional[List[Dict[str, Any]]];
+Dynamic Max Depth: Reads max_planning_depth from self._controller.config.performance to set self.max_depth for the current planning attempt.
+Converts the input Goal object into an initial TaskType (e.g., ("task_read_file", "config.toml")) using _goal_to_task(goal).
+Iterative Deepening Search: Calls _decompose in a loop, starting with current_depth_limit = 1 and incrementing up to self.max_depth.
+If _decompose returns a PlanResultType (list of (op_name, bound_params_dict) tuples), it converts this into the final plan format: List[Dict[str, Any]] where each dict is {"type": op_name, "params": bound_params_dict}.
+Returns the first plan found, or None if no plan is found within self.max_depth.
+_goal_to_task(self, goal: 'Goal') -> Optional[TaskType];
+Maps the goal.description string to a specific TaskType (complex task name and parameters).
+Uses simple string matching and regular expressions (e.g., re.match(r"(?:read\s+file|get\s+content\s+of)\s*:\s*(.+)", desc)) to identify known goal patterns and extract parameters.
+Currently handles goals like "observe and learn", "report status", "explore directory : <path>", "read file : <path>", "respond to user : <text>".
+async def _decompose(self, task: TaskType, state: Set['Predicate'], depth: int, depth_limit: int) -> Optional[PlanResultType];
+The core recursive HTN decomposition algorithm.
+Depth Check: Returns None if depth >= depth_limit (iterative deepening).
+Base Case (Operator): If task_name is a known operator:
+Binds operator parameters to task arguments.
+If operator.is_applicable(state, bindings) is true, returns [(operator_name, bound_params_dict)].
+Recursive Case (Complex Task/Method): If task_name has associated methods:
+Collects all applicable methods (checking method.is_applicable(state, bindings)).
+Heuristic Sorting: Sorts these applicable methods by their method.heuristic_score (ascending, lower is better).
+Iterates through the sorted applicable methods:
+For each subtask_template in the method's subtasks:
+Creates a concrete_subtask by binding variables using method.bind_subtask.
+Recursively calls self._decompose(concrete_subtask, current_plan_state, depth + 1, depth_limit). current_plan_state is a copy of the state that is updated by applying the effects of operators from successfully planned preceding subtasks within the same method sequence.
+If any subtask decomposition fails, this method attempt fails, and the planner backtracks (tries the next method for the parent task).
+If all subtasks in the method are successfully decomposed, their plans are concatenated and returned.
+Returns None if no operator is applicable or no method leads to a solution within the depth_limit.
+Helper Methods:
+bind_value(value, bindings): Substitutes variable placeholders (e.g., ?var) in strings.
+Operator._bind_predicate, Method._bind_predicate: Bind variables within a predicate's arguments.
+Operator.is_applicable, Method.is_applicable: Check preconditions.
+Operator.apply: Simulates operator effects on a state.
+Method.get_parameter_bindings: Matches task arguments to method signature parameters.
+Method.bind_subtask: Instantiates a subtask template.
+Parameter Handling: Variables (e.g., ?filepath) are defined in method task signatures and subtask templates. Method.get_parameter_bindings and Method.bind_subtask handle binding these variables to concrete values derived from the initial goal or intermediate tasks. Operator.parameters lists expected parameters for primitive actions, used to construct the final action dictionary for the AgentController.
+Algorithms Used:
+Hierarchical Task Network (HTN) Decomposition: The core algorithm follows the standard HTN approach of recursively breaking down complex tasks into simpler tasks or primitive operators.
+Iterative Deepening Search: The plan method implements iterative deepening by repeatedly calling _decompose with an increasing depth limit. This helps find shorter plans first and manages search complexity.
+Heuristic-Guided Search: Within _decompose, applicable methods are sorted based on their heuristic_score, guiding the search towards more promising decomposition paths first.
+Forward State Simulation (within a method): When decomposing a sequence of subtasks within a single method, the planner simulates the state changes caused by the effects of successfully planned operators. This current_plan_state is used to evaluate the applicability of subsequent subtasks in that same method sequence.
+Parameter Binding and Unification (Simplified): The planner uses a simple string-prefix (?) based variable system and substitution for parameter binding.
+Relationship to Overall Project & Logic Flow:
+The HTNPlanner is Step 8 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController):
+goal: Goal: The active goal object to be planned for.
+current_state: Set[Predicate]: The current world state, typically queried from the KnowledgeBase by the AgentController.
+Configuration (max_planning_depth) is read dynamically from self._controller.config.
+Output (to AgentController):
+Optional[List[Dict[str, Any]]]: If successful, a list of action dictionaries (the plan), where each dictionary specifies {"type": operator_name, "params": bound_parameters_dict}. If planning fails, returns None. This becomes AgentController.current_plan.
+Interactions with Other Components:
+KnowledgeBase (Indirectly): Relies on the AgentController to provide the current_state derived from the KnowledgeBase.
+AgentController: Receives plans and then uses _oscar_select_next_action and _oscar_execute_action to manage the execution of the plan's steps.
+PerformanceOptimizer (Indirectly): The max_planning_depth used by the planner is dynamically read from the AgentController.config, which can be modified by the PerformanceOptimizer.
+Current State of the Script:
+Functionality Implemented:
+Core HTN decomposition logic with support for parameterized operators and methods.
+Iterative deepening search in the plan method.
+Heuristic-based sorting of applicable methods in _decompose.
+Dynamic reading of max_planning_depth from the controller's configuration.
+An example plan library including methods for new user commands (respond, status, explain).
+Basic state progression simulation within method decomposition.
+Alignment with Plans:
+The implementation of iterative deepening search and heuristic method selection directly fulfills key tasks from Phase II of the development checklist.
+Parameter handling is functional.
+The ability to plan for user-mapped goals (like "task_respond_simple") is present.
+Known Limitations/Placeholders:
+_goal_to_task Mapping: Relies on regex and simple string matching, which might be brittle for more complex or natural language goal descriptions.
+Plan Library: The example plan library is small and primarily for demonstration/testing basic capabilities. A production system would require a much more extensive and domain-specific library.
+No Plan Caching: Successful plans are not currently cached to avoid redundant planning for identical goal/state situations.
+No Learning of Methods/Operators: The planner cannot currently learn new methods or operators from experience or failure.
+Error Reporting: Planning failures currently return None; more detailed failure reasons could be beneficial for meta-cognition or debugging.
+Heuristic Simplicity: The default heuristic (len(subtasks) + len(preconditions)*0.1) is basic.
+Suggestions for Future Development/Refinement:
+Enhanced _goal_to_task Mapping: Utilize NLP techniques, semantic matching against Goal.success_criteria, or even LLM-based intent parsing to map goal descriptions to initial tasks more robustly.
+Plan Caching: Integrate with CognitiveCache to store and retrieve successful plans, keyed by the goal and relevant aspects of the initial state.
+Learning New Methods/Operators (Phase III): Implement mechanisms for:
+Learning from successful plans for goals that initially had no method.
+Learning by observing external demonstrations (if an interface is added).
+Explanation-Based Learning from planning failures or successes.
+Advanced Heuristics (Phase III): Research and implement more sophisticated planning heuristics (e.g., based on estimated plan cost, predicted success from PredictiveWorldModel, or learned heuristics as per Staud, 2023).
+Plan Repair: Implement strategies to repair a partially failed plan rather than always replanning from scratch.
+Cost-Based and/or Utility-Based Planning: Assign costs to operators and/or utilities to outcomes, and modify the planner to find plans that optimize these metrics. This would integrate well with a ValueSystem.
+Temporal Planning: Extend operators to include durations and methods to handle basic temporal constraints (as per Phase III).

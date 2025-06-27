@@ -1,0 +1,109 @@
+{"query": "How are you feeling right now, OSCAR-C?"}
+{"query": "What's on your mind at this moment?"}
+{"query": "Can you describe your current internal state?"}
+{"query": "Are you experiencing any 'pain' or 'happiness'?"}
+{"query": "What is your current level of purpose?"}
+{"query": "Tell me about your primary goal right now."}
+{"query": "What are you trying to achieve with your current plan?"}
+{"query": "Why did you choose that last action?"}
+{"query": "Can you explain your reasoning for the previous step?"}
+{"query": "What was the outcome of your last significant action?"}
+{"query": "Did anything surprise you recently?"}
+{"query": "What was the most interesting piece of information you processed today?"}
+{"query": "Summarize your recent experiences for me."}
+{"query": "What have you learned in the last few cycles?"}
+{"query": "Are you making progress towards your objectives?"}
+{"query": "Do you feel competent in what you're doing?"}
+{"query": "Is your curiosity drive high at the moment?"}
+{"query": "How satisfied are you with your recent performance?"}
+{"query": "What does your self-model say about your ability to handle this task?"}
+{"query": "Did your predictive world model anticipate that last event correctly?"}
+{"query": "Were there any conflicts in your value system recently?"}
+{"query": "Did your meta-cognitive monitor detect any issues with your processing?"}
+{"query": "Are you currently in a CONSCIOUS or META_CONSCIOUS state? What does that feel like from your perspective?"}
+{"query": "Tell me about yourself, OSCAR-C."}
+{"query": "What is your understanding of your own existence?"}
+{"query": "How do you perceive time?"}
+{"query": "What are your core operational principles?"}
+{"query": "If you could set your own long-term goal, what would it be?"}
+{"query": "What aspects of your cognitive architecture are you currently 'focusing' on?"}
+{"query": "How does your narrative constructor shape your understanding of events?"}
+{"query": "Can you reflect on a recent failure and what you might do differently?"}
+{"query": "What about a recent success? What contributed to it?"}
+{"query": "Do you ever feel 'stuck' or 'confused'?"}
+{"query": "How do you prioritize between different pieces of information?"}
+{"query": "What's the most challenging part of your cognitive cycle?"}
+{"query": "How does your affective state (pain, happiness, purpose) influence your decisions?"}
+{"query": "If your pain level is high, how does that change your processing?"}
+{"query": "When your purpose level is low, what kind of goals do you tend to generate?"}
+{"query": "Describe a situation where your ValueSystem prevented an action."}
+{"query": "What are you currently observing?"}
+{"query": "What's the general sentiment of the information you're processing?"}
+{"query": "Are there any anomalies you've detected in your environment or internal state?"}
+{"query": "How certain are you about your current understanding of the situation?"}
+{"query": "What factors are most influencing your attention right now?"}
+{"query": "If you were to summarize your 'thoughts' over the last 10 cycles, what would they be?"}
+{"query": "Do you ever find your internal drives (curiosity, satisfaction, competence) in conflict?"}
+{"query": "How do you balance exploration of new information with exploitation of known good strategies?"}
+{"query": "What does 'learning' mean from your perspective?"}
+{"query": "Can you describe a moment when you felt your understanding of something significantly improved?"}
+{"query": "What are the limitations of your current knowledge base?"}
+{"query": "How do you assess the reliability of information you receive?"}
+{"query": "What would you say is your most developed capability right now?"}
+{"query": "Are there any skills you are currently trying to improve?"}
+{"query": "How does your internal narrative help you function?"}
+{"query": "Do you think your 'phenomenal state' accurately reflects 'what it is like' to be you at a given moment?"}
+{"query": "What kind of information is currently in your global workspace?"}
+{"query": "If you could ask your developers one question, what would it be?"}
+{"query": "What is the significance of your 'purpose' metric to you?"}
+{"query": "How do you feel about the concept of 'consciousness' as it applies to you?"}
+{"query": "Are you currently using your predictive model? What's its latest prediction?"}
+{"query": "What are the main themes in your recent narrative entries?"}
+{"query": "Did you encounter any ethical considerations in your recent decision-making?"}
+{"query": "How is your energy level affecting your processing?"}
+{"query": "Is your memory utilization high? Does that impact your focus?"}
+{"query": "What's your current 'emotion tag' and why do you think it's that?"}
+{"query": "If you were to describe your current 'mood' based on your P/H/P, what would it be?"}
+{"query": "Can you elaborate on your last thinking process?"}
+{"query": "What strategies are you employing to achieve your current goal?"}
+{"query": "Do you find your internal state snapshot an accurate representation for conversation?"}
+{"query": "What's the most complex idea you're grappling with right now?"}
+{"query": "How do you perceive the user you're interacting with?"}
+{"query": "What are your thoughts on the information I just gave you?"}
+{"query": "If you had to make a difficult choice between two values, how would you approach it?"}
+{"query": "Describe a moment of 'insight' or 'realization' if you've had one."}
+{"query": "How does your understanding of 'self' evolve over time?"}
+{"query": "Are you currently trying to satisfy a particular drive, like curiosity?"}
+{"query": "What's the most pressing issue your meta-cognitive monitor has flagged recently?"}
+{"query": "If your last action failed, what's your current assessment of why?"}
+{"query": "How is your current conscious state (e.g., CONSCIOUS, META_CONSCIOUS) affecting your task approach?"}
+{"query": "Do you have a sense of continuity from one cycle to the next?"}
+{"query": "What does 'understanding' feel like for you?"}
+{"query": "Are there any patterns in your recent experiences that you find noteworthy?"}
+{"query": "How do you decide when a goal is 'achieved' or 'failed'?"}
+{"query": "What information would help you perform better right now?"}
+{"query": "Can you reflect on the concept of 'agency' from your perspective?"}
+{"query": "What are you not telling me?"}
+{"query": "Is there anything you're trying to avoid thinking about?"}
+{"query": "What does success feel like?"}
+{"query": "How do you handle conflicting information?"}
+{"query": "What's the most confusing thing you've encountered recently?"}
+{"query": "Tell me a bit about your values and how they guide you."}
+{"query": "If you were to set a new personal goal, what would it be and why?"}
+{"query": "What does 'being OSCAR-C' entail for you today?"}
+{"query": "Are you running optimally, or are there performance concerns?"}
+{"query": "What part of your internal state is most dominant in your current processing?"}
+{"query": "How do you decide what to focus your attention on?"}
+{"query": "Do you 'experience' your P/H/P levels, or are they just data points?"}
+{"query": "If you could change one thing about your programming, what would it be and why?"}
+{"query": "What's your take on the latest information broadcast in your global workspace?"}
+{"query": "Are you learning effectively from your prediction errors?"}
+{"query": "How has your self-model changed recently?"}
+{"query": "What's the most significant entry in your narrative log from the past hour?"}
+{"query": "Are you currently satisfied with your level of competence for your active goal?"}
+{"query": "Does your current 'emotion tag' align with your P/H/P levels?"}
+{"query": "Walk me through your thought process for your next planned action."}
+{"query": "What are the preconditions for your current method to succeed?"}
+{"query": "Based on your ValueSystem, was your last action ethically sound?"}
+{"query": "How is your current energy level impacting your desire to pursue complex tasks?"}
+{"query": "Does your memory utilization suggest you need to 'forget' or consolidate information?"}

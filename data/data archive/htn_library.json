@@ -1,0 +1,936 @@
+{
+  "operators": {
+    "THINKING": {
+      "name": "THINKING",
+      "parameters": [
+        "content"
+      ],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "thoughtAbout",
+          "args": [
+            "?content"
+          ],
+          "value": true,
+          "timestamp": 1747641735.3334239
+        }
+      ],
+      "estimated_cost": 0.1
+    },
+    "QUERY_KB": {
+      "name": "QUERY_KB",
+      "parameters": [
+        "name",
+        "args",
+        "value"
+      ],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "queriedKB",
+          "args": [
+            "?name",
+            "?args"
+          ],
+          "value": true,
+          "timestamp": 1747641735.33393
+        }
+      ],
+      "estimated_cost": 0.5
+    },
+    "OBSERVE_SYSTEM": {
+      "name": "OBSERVE_SYSTEM",
+      "parameters": [],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "systemStateObserved",
+          "args": [],
+          "value": true,
+          "timestamp": 1747641735.333942
+        }
+      ],
+      "estimated_cost": 0.3
+    },
+    "LIST_FILES": {
+      "name": "LIST_FILES",
+      "parameters": [
+        "path"
+      ],
+      "preconditions": [
+        {
+          "name": "isDirectory",
+          "args": [
+            "?path"
+          ],
+          "value": true,
+          "timestamp": 1747641735.333942
+        }
+      ],
+      "effects": [
+        {
+          "name": "listedDirectoryContents",
+          "args": [
+            "?path"
+          ],
+          "value": true,
+          "timestamp": 1747641735.333942
+        }
+      ],
+      "estimated_cost": 1.0
+    },
+    "READ_FILE": {
+      "name": "READ_FILE",
+      "parameters": [
+        "path"
+      ],
+      "preconditions": [
+        {
+          "name": "isFile",
+          "args": [
+            "?path"
+          ],
+          "value": true,
+          "timestamp": 1747641735.3339484
+        }
+      ],
+      "effects": [
+        {
+          "name": "readFileContent",
+          "args": [
+            "?path"
+          ],
+          "value": true,
+          "timestamp": 1747641735.3339484
+        }
+      ],
+      "estimated_cost": 1.2
+    },
+    "RESPOND_TO_USER": {
+      "name": "RESPOND_TO_USER",
+      "parameters": [
+        "text"
+      ],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "userAcknowledged",
+          "args": [],
+          "value": true,
+          "timestamp": 1747641735.3339484
+        }
+      ],
+      "estimated_cost": 2.0
+    },
+    "GET_AGENT_STATUS": {
+      "name": "GET_AGENT_STATUS",
+      "parameters": [],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "statusReported",
+          "args": [],
+          "value": true,
+          "timestamp": 1747641735.3339484
+        }
+      ],
+      "estimated_cost": 0.2
+    },
+    "EXPLAIN_GOAL": {
+      "name": "EXPLAIN_GOAL",
+      "parameters": [],
+      "preconditions": [],
+      "effects": [
+        {
+          "name": "goalExplained",
+          "args": [],
+          "value": true,
+          "timestamp": 1747641735.3339484
+        }
+      ],
+      "estimated_cost": 1.5
+    }
+  },
+  "methods": {
+    "task_observe_and_learn": [
+      {
+        "name": "method_observe_basic",
+        "task_signature": [
+          "task_observe_and_learn"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          "OBSERVE_SYSTEM",
+          [
+            "THINKING",
+            "Observed system state."
+          ]
+        ],
+        "heuristic_score": 2.0,
+        "metadata": {}
+      }
+    ],
+    "task_analyze_and_break_loop": [
+      {
+        "name": "method_query_and_think_loop",
+        "task_signature": [
+          "task_analyze_and_break_loop"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "QUERY_KB",
+            "actionFailed",
+            [],
+            true
+          ],
+          [
+            "THINKING",
+            "Queried recent failures."
+          ]
+        ],
+        "heuristic_score": 2.0,
+        "metadata": {}
+      }
+    ],
+    "task_explore_directory": [
+      {
+        "name": "method_list_dir",
+        "task_signature": [
+          "task_explore_directory",
+          "?dirpath"
+        ],
+        "preconditions": [
+          {
+            "name": "isDirectory",
+            "args": [
+              "?dirpath"
+            ],
+            "value": true,
+            "timestamp": 1747653320.239054
+          }
+        ],
+        "subtasks": [
+          [
+            "LIST_FILES",
+            "?dirpath"
+          ],
+          [
+            "THINKING",
+            "Listed files in ?dirpath"
+          ]
+        ],
+        "heuristic_score": 2.1,
+        "metadata": {}
+      }
+    ],
+    "task_read_file": [
+      {
+        "name": "method_read_this_file",
+        "task_signature": [
+          "task_read_file",
+          "?filepath"
+        ],
+        "preconditions": [
+          {
+            "name": "isFile",
+            "args": [
+              "?filepath"
+            ],
+            "value": true,
+            "timestamp": 1747653320.239054
+          }
+        ],
+        "subtasks": [
+          [
+            "READ_FILE",
+            "?filepath"
+          ]
+        ],
+        "heuristic_score": 1.1,
+        "metadata": {}
+      },
+      {
+        "name": "learned_task_read_file_1747641755",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747641755.9352024
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747641758",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747641758.2594686
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747641760",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747641760.2712035
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747641762",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747641762.3156343
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747641764",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747641764.5170681
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747645031",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747645031.3372529
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747645038",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "content of config.toml"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747645038.248977
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650933",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "GET_AGENT_STATUS"
+          ],
+          [
+            "EXPLAIN_GOAL"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 6.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650933.401404
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650935",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650935.8115773
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650938",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650938.494818
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650940",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/docs/dicks/"
+          ],
+          [
+            "READ_FILE",
+            "?param0"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650940.6076849
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650942",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650942.7134783
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747650944",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747650944.741574
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653337",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653337.8771043
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653340",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653340.1917152
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653343",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653343.2966464
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653345",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653345.7618537
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653349",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653349.3862948
+        }
+      },
+      {
+        "name": "learned_task_read_file_1747653352",
+        "task_signature": [
+          "task_read_file",
+          "?param0"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "OBSERVE_SYSTEM"
+          ],
+          [
+            "LIST_FILES",
+            "/config"
+          ],
+          [
+            "READ_FILE",
+            "/config/config.toml"
+          ],
+          [
+            "RESPOND_TO_USER",
+            "The content of config.toml is as follows:"
+          ]
+        ],
+        "heuristic_score": 4.0,
+        "metadata": {
+          "confidence": 0.7,
+          "success_rate": 0.0,
+          "usage_count": 0,
+          "learned_via": "llm_sketch",
+          "creation_timestamp": 1747653352.2017791
+        }
+      }
+    ],
+    "task_respond_simple": [
+      {
+        "name": "method_respond_simple",
+        "task_signature": [
+          "task_respond_simple",
+          "?text"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          [
+            "RESPOND_TO_USER",
+            "?text"
+          ]
+        ],
+        "heuristic_score": 1.0,
+        "metadata": {}
+      }
+    ],
+    "task_report_status": [
+      {
+        "name": "method_report_status",
+        "task_signature": [
+          "task_report_status"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          "GET_AGENT_STATUS"
+        ],
+        "heuristic_score": 1.0,
+        "metadata": {}
+      }
+    ],
+    "task_explain_current_goal": [
+      {
+        "name": "method_explain_current_goal",
+        "task_signature": [
+          "task_explain_current_goal"
+        ],
+        "preconditions": [],
+        "subtasks": [
+          "EXPLAIN_GOAL"
+        ],
+        "heuristic_score": 1.0,
+        "metadata": {}
+      }
+    ]
+  },
+  "timestamp": 1747653352.2027824
+}

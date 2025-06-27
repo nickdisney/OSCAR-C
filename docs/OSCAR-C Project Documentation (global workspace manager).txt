@@ -1,0 +1,80 @@
+ OSCAR-C Project Documentation: cognitive_modules/global_workspace_manager.py
+File Path: cognitive_modules/global_workspace_manager.py
+Purpose and Role:
+The GlobalWorkspaceManager (GWM) is a central component in OSCAR-C that models the "global workspace" concept from Bernard Baars' Global Workspace Theory (GWT). Its primary responsibility is to select a limited number of the most salient information items, based on attention weights provided by the AttentionController, and make this selected content "globally available" or "broadcast" it. This broadcast content represents the information that is effectively "in consciousness" for the current cognitive cycle and is subsequently used by other components like the ExperienceStream to form an integrated phenomenal state.
+Theoretical Basis / Cognitive Inspiration:
+Global Workspace Theory (GWT): This component is a direct implementation of the core mechanism of GWT (Baars, 1988; Dehaene & Naccache, 2001). GWT posits that conscious experience arises when information from various specialized unconscious processors gains access to a limited-capacity global workspace, from which it is broadcast to the rest of the system. The GWM embodies this selection and broadcasting function.
+Limited Capacity of Consciousness/Working Memory: The capacity parameter of the GWM reflects the well-documented limited capacity of human consciousness and working memory (Miller, 1956, "The Magical Number Seven, Plus or Minus Two"; Cowan, 2001, for a more modern estimate of 4±1 chunks). The GWM enforces this limit.
+Competition for Awareness: The selection process, driven by attention weights, simulates the competition among different pieces of information to enter the conscious spotlight. Higher attention weights increase the likelihood of an item being selected.
+Implementation Details:
+Inheritance:
+class GlobalWorkspaceManager(WorkspaceManager):
+Implements the WorkspaceManager protocol (and by extension, CognitiveComponent).
+Configuration: Loaded during initialize from the global_workspace section of config.toml.
+capacity: int: The maximum number of items allowed in the workspace simultaneously.
+broadcast_threshold: float: A minimum attention weight an item must have to be considered for entry into the workspace (unless the min_items_if_any_attended logic applies).
+min_items_if_any_attended: int: If at least one candidate item has any positive attention weight but none meet the broadcast_threshold, this parameter specifies the minimum number of top-weighted items (up to capacity) that will still be forced into the workspace. This ensures the workspace isn't perpetually empty if attention scores are generally low but non-zero.
+State Variables:
+workspace_content: Dict[str, Any]: A dictionary storing the content of items currently selected for the global workspace (mapping item ID to item content).
+workspace_weights: Dict[str, float]: A dictionary storing the attention weights of the items currently in workspace_content.
+last_broadcast_time: float: Timestamp of the last time the workspace content was updated.
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters (capacity, broadcast_threshold, min_items_if_any_attended).
+Includes validation to ensure capacity > 0, 0 <= broadcast_threshold <= 1.0, and 0 <= min_items_if_any_attended <= capacity.
+async def update_workspace(self, attention_weights: Dict[str, float], all_candidates_data: Dict[str, Dict[str, Any]]) -> Dict[str, Any];
+This is the core selection logic.
+Input:
+attention_weights: Dictionary mapping candidate item IDs to their salience scores from AttentionController.
+all_candidates_data: Dictionary containing the full data for all candidates (including their content), from which the GWM retrieves content for selected items.
+Logic:
+Sorts all input attention_weights.items() by weight in descending order.
+Identifies eligible_items_passing_threshold (those with weight >= self.broadcast_threshold).
+Selection Process:
+If eligible_items_passing_threshold is not empty: Selects the top N items from this eligible list, up to self.capacity.
+Else if sorted_all_by_weight is not empty AND self.min_items_if_any_attended > 0: (No items met the main threshold, but some items did receive attention). Selects the top min(self.min_items_if_any_attended, self.capacity) items from sorted_all_by_weight, provided their attention weight is greater than 0.
+Else (no items received any attention, or min_items_if_any_attended is 0 and nothing met threshold): The workspace will be empty.
+Populates self.workspace_content (retrieving content from all_candidates_data using selected item IDs) and self.workspace_weights with the selected items and their weights.
+Logs changes to workspace content (added/removed items).
+Output: Returns the new self.workspace_content.
+async def broadcast(self) -> Dict[str, Any];
+Simply returns the current self.workspace_content. This content is then used by other components in the cognitive cycle.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+The main entry point called by AgentController.
+Expects input_state to contain {"attention_weights": ..., "all_candidates_data": ...}.
+Calls self.update_workspace() with these inputs.
+Then calls self.broadcast() to get the selected content.
+Returns {"broadcast_content": ...}.
+async def reset(self) -> None;
+Clears self.workspace_content and self.workspace_weights, and resets self.last_broadcast_time.
+async def get_status(self) -> Dict[str, Any];
+Returns configuration parameters (capacity, broadcast_threshold, min_items_if_any_attended), current load (number of items in workspace), last_broadcast_time, and a list of current item IDs in the workspace.
+Algorithms Used:
+Threshold-and-Capacity Based Selection: A primary selection filter based on items exceeding a broadcast_threshold, followed by a capacity limit.
+Priority Queue (Implicit): Sorting candidates by attention weight effectively simulates a priority queue for selection.
+Minimum Content Guarantee Logic: A specific rule (min_items_if_any_attended) to ensure the workspace is not empty if some information, however weakly attended, is available.
+Relationship to Overall Project & Logic Flow:
+The GlobalWorkspaceManager is Step 3 in the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController via AttentionController):
+attention_weights: The salience scores for all current attention candidates.
+all_candidates_data: The full data payload for all candidates, needed to retrieve the content of selected items.
+Output (to AgentController):
+{"broadcast_content": Dict[str, Any]}: The dictionary of items selected to be in the global workspace for the current cycle.
+Downstream Consumers:
+ExperienceStream (Step 4): The broadcast_content is a primary input to ExperienceStream, forming the core of the PhenomenalState.
+ConsciousnessLevelAssessor (Step 5): Also receives workspace_content (which is the broadcast_content) as an input for its assessment.
+Potentially other components: Any component that needs access to the "consciously focused" information of the current cycle would consume broadcast_content.
+AttentionController (next cycle): The content of the GWM is used by the AttentionController in the next cycle to update its recent_workspace_content_hashes for novelty detection.
+Current State of the Script:
+Functionality Implemented:
+The core GWT-inspired selection logic (threshold, capacity) is functional.
+The refinement for min_items_if_any_attended is correctly implemented, making the workspace population more robust in low-salience scenarios.
+Proper initialization from configuration and status reporting are in place.
+Alignment with Plans: The component faithfully implements the GWT selection mechanism as planned, serving as the "gatekeeper" to conscious processing. The min_items_if_any_attended feature is a good example of an iterative refinement to the basic GWT model.
+Known Limitations/Placeholders:
+No Intrinsic Workspace Dynamics: Once items are selected, they remain static until the next cycle's update_workspace call. There's no concept of items "fading" from the workspace over time within a single selection process (though they are re-evaluated based on new attention weights each cycle).
+Competition Handled Externally: The "competition" for workspace access is entirely resolved by the AttentionController providing the weights. The GWM itself is a selector based on these pre-computed weights, not an active competitor.
+Suggestions for Future Development/Refinement:
+Workspace Stability Metrics: Introduce metrics to quantify the stability or volatility of the workspace content from cycle to cycle (e.g., Jaccard index of item IDs between consecutive broadcasts). This could be fed to MetaCognitiveMonitor as an indicator of focused vs. scattered attention.
+Item-Specific TTL within Workspace (Advanced): For very advanced GWT models, consider if items could have different "residence times" in the workspace based on their type or ongoing relevance, though this adds considerable complexity.
+Specialized Workspace "Slots" (Advanced): For more complex agents or specific tasks, the workspace could conceptually be divided into specialized slots (e.g., a slot for the current primary goal, a slot for the most salient percept, a slot for emotional state summary). This moves away from a purely homogeneous GWT but might be pragmatically useful. This is not currently in OSCAR-C's design.

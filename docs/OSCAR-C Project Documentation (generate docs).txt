@@ -1,0 +1,67 @@
+OSCAR-C Project Documentation: scripts/generate_docs.py
+File Path: scripts/generate_docs.py
+Purpose and Role:
+The generate_docs.py script is a utility designed to automate the creation of API documentation for the OSCAR-C project. It uses the pdoc library (expected to be installed in the Python environment) to parse Python source files and generate HTML documentation from their docstrings, class structures, and method signatures. This script helps maintain up-to-date technical documentation, making it easier for developers to understand the project's codebase, module interfaces, and component functionalities.
+Theoretical Basis / Cognitive Inspiration:
+Not applicable. This is a software development tool focused on code documentation and maintainability. Good documentation aids developers' understanding and collaboration.
+Implementation Details:
+Core Technology: Relies on the pdoc Python library, which is a tool for auto-generating API documentation.
+Configuration Constants:
+MODULES_TO_DOC: List[str]: A list of strings specifying the Python modules or packages (relative to the PROJECT_ROOT) for which documentation should be generated. Examples include "models", "protocols", "cognitive_modules", "agent_controller".
+DOCS_OUTPUT_DIR: Path: Defines the output directory for the generated HTML documentation, relative to PROJECT_ROOT (e.g., Path("docs/api")).
+PROJECT_ROOT: Path: Automatically determined as the parent directory of the scripts/ directory where this script resides.
+Key Functions:
+run_command(cmd_list: list, working_dir: Path) function:
+A helper function to execute shell commands using subprocess.run().
+It sets the PYTHONPATH environment variable to include PROJECT_ROOT to ensure pdoc can correctly import and analyze the project's modules.
+Captures stdout and stderr from the command.
+Includes error handling for FileNotFoundError (if pdoc or the Python interpreter is not found) and subprocess.CalledProcessError.
+Returns True on success, False on failure (or the captured output if capture_output was true, though this function's signature returns bool).
+generate_api_docs() -> bool; function:
+This is the main function that orchestrates the documentation generation process.
+Output Directory Creation: Ensures that the DOCS_OUTPUT_DIR (e.g., docs/api/) exists, creating it if necessary.
+Iterate and Document Modules:
+Loops through each module_name in the MODULES_TO_DOC list.
+Constructs the command list to invoke pdoc: [sys.executable, "-m", "pdoc", "--html", "--force", "--output-dir", str(module_output_dir), module_name].
+sys.executable: Uses the same Python interpreter that is running the script to invoke pdoc as a module.
+--html: Specifies HTML output.
+--force: Overwrites existing documentation files.
+--output-dir: Specifies where pdoc should place the generated files for the current module.
+module_name: The target module/package.
+Calls run_command() to execute pdoc from the PROJECT_ROOT.
+Logs success or failure for each module.
+Main Index Generation:
+Creates a simple index.html file within DOCS_OUTPUT_DIR.
+This index file contains basic HTML structure and a list of hyperlinks to the documentation generated for each module in MODULES_TO_DOC.
+It attempts to guess the correct link path (e.g., module_name.html for single files, module_name/index.html for packages) based on whether a corresponding .py file exists at the top level of the project for the module name.
+Returns True if all documentation generation steps succeed, False otherwise.
+Command-Line Execution (if __name__ == "__main__":):
+Allows the script to be run directly (e.g., python scripts/generate_docs.py).
+Checks if pdoc can be imported, providing an error message and installation instructions if it's not found.
+Calls generate_api_docs() and exits with status code 0 for success or 1 for failure.
+Algorithms Used:
+Not applicable in terms of complex algorithms. The script primarily orchestrates calls to the external pdoc tool and performs basic file I/O and string manipulation for the index page.
+Relationship to Overall Project & Logic Flow:
+generate_docs.py is a development and maintenance utility.
+Not Part of Agent Runtime: It does not interact with the running OSCAR-C agent.
+Development Workflow: Intended to be run by developers whenever significant code changes are made or when new API documentation is needed. It can be integrated into a CI/CD pipeline to ensure documentation is always up-to-date.
+Output: Produces a set of HTML files in docs/api/ that constitute the project's API documentation. This documentation is derived from docstrings and code structure.
+Current State of the Script:
+Functionality Implemented:
+Generation of HTML API documentation for a predefined list of modules/packages using pdoc.
+Creation of a basic HTML index page linking to the generated module documentation.
+Correct handling of PYTHONPATH to ensure pdoc can find project modules.
+Error handling for pdoc execution and file operations.
+Command-line interface.
+Alignment with Plans: Fulfills the "API Documentation Generation" task (Task 7.1 from setup_planning.py).
+Known Limitations/Placeholders:
+Static Module List: The MODULES_TO_DOC list is hardcoded. If new core modules are added to the project, this list needs to be manually updated.
+Index Link Path Heuristic: The logic for generating links in the index.html file makes a simple guess based on whether module_name.py exists. This might not always be accurate for complex package structures or if pdoc changes its output conventions. A more robust method would be to scan the actual output directory structure created by pdoc.
+Styling of Index: The main index.html has very basic inline styling. It could be enhanced or use an external CSS file.
+pdoc Dependency: Relies on pdoc being installed and correctly configured in the environment where the script is run.
+Suggestions for Future Development/Refinement:
+Dynamic Module Discovery: Instead of a hardcoded MODULES_TO_DOC list, implement logic to automatically discover Python modules and packages within the main OSCAR-C project directory (e.g., consciousness_experiment/) that should be documented. This could involve walking the directory tree and identifying __init__.py files or Python files that meet certain criteria.
+Improved Index Generation: Enhance the main index.html generation to be more robust by scanning the DOCS_OUTPUT_DIR for index.html files generated by pdoc within subdirectories, ensuring all documented modules are correctly linked.
+Customizable pdoc Templates: pdoc supports custom templates. For a more branded or tailored documentation appearance, custom pdoc templates could be developed.
+Integration with Build Systems/CI: Integrate this script into the project's CI/CD pipeline so that documentation is automatically (re)generated and potentially deployed (e.g., to GitHub Pages) on each push or release.
+Docstring Quality Check: Consider integrating a tool that checks for docstring coverage and quality (e.g., pydocstyle, interrogate) as a preliminary step or complementary script.

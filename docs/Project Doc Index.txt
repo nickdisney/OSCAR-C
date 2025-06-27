@@ -1,0 +1,40 @@
+OSCAR-C Project Documentation Index:
+Part I: Foundational Models & Protocols
+models/enums.py - Enumerations
+models/datatypes.py - Core Data Structures
+protocols.py - Component Interface Protocols
+agent_state.py - Agent Operational States
+Part II: Core Cognitive Components
+5. cognitive_modules/knowledge_base.py - Knowledge Base
+6. cognitive_modules/cognitive_cache.py - Cognitive Cache
+7. cognitive_modules/attention_controller.py - Attention Controller
+8. cognitive_modules/global_workspace_manager.py - Global Workspace Manager
+9. cognitive_modules/experience_stream.py - Experience Stream
+10. cognitive_modules/consciousness_level_assessor.py - Consciousness Level Assessor
+11. cognitive_modules/htn_planner.py - HTN Planner
+12. cognitive_modules/predictive_world_model.py - Predictive World Model
+13. cognitive_modules/dynamic_self_model.py - Dynamic Self-Model
+14. cognitive_modules/emergent_motivation_system.py - Emergent Motivation System
+15. cognitive_modules/narrative_constructor.py - Narrative Constructor
+16. cognitive_modules/loop_detector.py - Loop Detector
+17. cognitive_modules/meta_cognitive_monitor.py - Meta-Cognitive Monitor
+18. cognitive_modules/performance_optimizer.py - Performance Optimizer
+19. cognitive_modules/error_recovery.py - Error Recovery System
+Part III: Orchestration & External Communication
+20. agent_controller.py - Agent Controller
+21. external_comms.py - External Communications
+Part IV: Configuration & Auxiliary Systems
+22. config.toml - Configuration File (Documentation of its structure and key parameters)
+23. scripts/validate_config.py - Configuration Validation Script
+24. scripts/kill_agent.py - Agent Termination Script
+25. scripts/setup_planning.py - Planning Document Generation Script
+26. scripts/generate_docs.py - API Documentation Generation Script
+27. scripts/release.py - Release Automation Script
+28. migrations/v1_to_v2.py - Data Migration Script
+Part V: Testing Framework
+29. tests/smoke/test_basic.py - Basic Smoke Tests
+30. tests/unit/test_experience_stream.py - Unit Tests for ExperienceStream
+31. tests/integration/test_cognitive_cycle.py - Cognitive Cycle Integration Tests
+32. tests/integration/test_migration.py - Migration Integration Tests
+Part VI: User Interface
+33. agent_ui.py - Standalone Agent User Interface

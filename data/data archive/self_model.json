@@ -1,0 +1,28 @@
+{
+  "version": 0,
+  "identity_traits": {
+    "curiosity": 0.5,
+    "caution": 0.5,
+    "persistence": 0.5,
+    "adaptability": 0.5
+  },
+  "capabilities": {},
+  "limitations": {},
+  "knowledge_meta": {
+    "validated_paths": {},
+    "invalid_paths": [],
+    "learned_concepts": {}
+  },
+  "internal_state_awareness": {
+    "last_valence": 0.0,
+    "last_intensity": 0.0,
+    "recent_error_types": []
+  },
+  "learning_rate": 0.1,
+  "learning_rate_meta": {
+    "capabilities": {
+      "fast_learner": [],
+      "slow_learner": []
+    }
+  }
+}

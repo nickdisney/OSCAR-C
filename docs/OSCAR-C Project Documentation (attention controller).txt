@@ -1,0 +1,99 @@
+OSCAR-C Project Documentation: cognitive_modules/attention_controller.py
+File Path: cognitive_modules/attention_controller.py
+Purpose and Role:
+The AttentionController is a core cognitive component in OSCAR-C responsible for implementing a selective attention mechanism. Its primary function is to evaluate a set of potential information candidates (originating from perception, active goals, memory, predictions, etc.) and assign an "attention weight" or salience score to each. These weights guide the GlobalWorkspaceManager in selecting a limited subset of information to be "broadcast" and become the focus of the agent's "conscious" processing for the current cognitive cycle.
+Theoretical Basis / Cognitive Inspiration:
+Selective Attention: This component directly models the cognitive process of selective attention, which allows organisms (and AI systems) to prioritize and focus on relevant information from a vast stream of sensory input and internal thoughts, while filtering out less relevant or distracting information (Broadbent, 1958; Treisman, 1969).
+Global Workspace Theory (GWT): The AttentionController plays a crucial role in GWT (Baars, 1988; Dehaene & Naccache, 2001) by acting as the mechanism that determines which "unconscious processors" (information sources) win the competition for access to the global workspace. The calculated attention weights represent the salience or urgency of each candidate.
+Bottom-Up and Top-Down Attention: The implemented multi-factor scoring attempts to capture both:
+Bottom-Up (Stimulus-Driven) Attention: Factors like recency, novelty (new, unhabituated information), and surprise (unexpected information, often due to prediction errors) attract attention based on the inherent properties of the stimuli themselves.
+Top-Down (Goal-Directed) Attention: Factors like goal_relevance (how pertinent information is to the current active goal) and weight_hint (explicit priority assigned by the information source) guide attention based on the agent's internal state and objectives. This distinction is well-established in cognitive neuroscience (Corbetta & Shulman, 2002; Katsuki & Constantinidis, 2014).
+Predictive Coding: The incorporation of surprise (based on PredictiveWorldModel's last_prediction_error) aligns with predictive coding theories, where deviations from expectation (prediction errors) are highly salient and drive learning and attention shifts (Clark, 2013; Friston, 2010).
+Implementation Details:
+Inheritance:
+class AttentionController(AttentionMechanism):
+Implements the AttentionMechanism protocol (and by extension, CognitiveComponent).
+Configuration: Loaded during initialize from the attention_controller section of config.toml.
+recency_weight, hint_weight, goal_relevance_weight, novelty_bonus_weight, surprise_bonus_weight: Floats determining the contribution of each factor to the combined score.
+max_candidates: Integer limiting the number of candidates processed if too many are provided (truncation occurs based on weight_hint).
+softmax_temperature: Float controlling the sharpness of the final normalized weight distribution.
+novelty_window_size: Integer determining how many past workspace content hashes are remembered for novelty calculation.
+State Variables:
+recent_workspace_content_hashes: Deque[int]: A deque storing hashes of content recently present in the global workspace (fed from input_state["last_gwm_content_for_novelty"]). Used for novelty calculation.
+_last_prediction_error_for_surprise: Optional[Dict[str, Any]]: Stores details of the last prediction error from the PredictiveWorldModel (fed from input_state["last_prediction_error"]). Used for surprise calculation.
+_current_cycle_active_id: Optional[str]: Stores the ID of the goal currently considered active for relevance calculations (fed from input_state["current_cycle_active_goal_id"]).
+Key Methods:
+async def initialize(self, config: Dict[str, Any], controller: Any) -> bool;
+Loads configuration parameters and initializes state variables.
+async def process(self, input_state: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]];
+The main entry point called by AgentController.
+Extracts candidates, current_cycle_active_goal_id, last_gwm_content_for_novelty, and last_prediction_error from input_state.
+Updates self.recent_workspace_content_hashes using last_gwm_content_for_novelty.
+Calls self.allocate_attention(candidates) to get the attention weights.
+Returns {"attention_weights": attention_weights}.
+async def allocate_attention(self, candidates: Dict[str, Dict[str, Any]]) -> Dict[str, float];
+Candidate Truncation: If len(candidates) > self.max_candidates, sorts candidates by weight_hint (descending) and truncates the list.
+Score Calculation Loop: Iterates through each candidate item_id and item_data:
+Recency Score: Calculated using math.exp(-time_delta / 60.0) (exponential decay over 60 seconds).
+Hint Score: Directly uses item_data.get("weight_hint", 0.5), clamped between 0 and 1.
+Goal Relevance Score:
+If the candidate is a goal (item_id starts with "goal_"): Score is 1.0 if its ID matches self._current_cycle_active_id, otherwise 0.1 (low base relevance).
+If not a goal: Calculates keyword overlap between the candidate's string content and the active goal's description (active_goal_desc_general_context).
+Novelty Score (_calculate_novelty_score): Hashes item_data.get("content"). Returns 1.0 if the hash is not in self.recent_workspace_content_hashes, 0.0 otherwise.
+Surprise Score (_calculate_surprise_score):
+Uses self._last_prediction_error_for_surprise. If no error or error type is not "outcome_mismatch", returns 0.0.
+If error type is "outcome_mismatch":
+Boosts goals related to a failed action (especially READ_FILE on a matching path from error_details.error_source_details.params_source.path).
+Boosts percepts that were mispredicted (e.g., item_id matches percept_{error_details.error_source_details.mispredicted_percept_key}), with score proportional to error_details.error_magnitude.
+Combined Score: A weighted sum of these individual scores using the configured weights.
+Normalization (_normalize_scores): Applies softmax normalization (exp(score / temp) / sum(exp(all_scores / temp))) to the combined scores. Includes an OverflowError fallback to simple sum normalization.
+_calculate_novelty_score(self, item_id: str, item_data: Dict[str, Any]) -> float;
+As described above; hashes str(content_to_check).
+_calculate_surprise_score(self, item_id: str, item_data: Dict[str, Any]) -> float;
+As described above; complex logic involving self._last_prediction_error_for_surprise.
+_normalize_scores(self, scores: Dict[str, float]) -> Dict[str, float];
+As described above; includes max score subtraction for numerical stability in softmax.
+async def reset(self) -> None;
+Clears _current_cycle_active_id, recent_workspace_content_hashes, and _last_prediction_error_for_surprise.
+async def get_status(self) -> Dict[str, Any];
+Returns current configuration weights and buffer sizes.
+Algorithms Used:
+Weighted Sum Model: For combining multiple heuristic scores (recency, hint, relevance, novelty, surprise) into a single salience score.
+Exponential Decay: For calculating recency scores.
+Hashing: For novelty detection (comparing content hashes).
+Keyword Overlap: Simple string processing for basic goal relevance of non-goal items.
+Softmax Normalization: To convert raw combined scores into a probability-like distribution of attention weights, emphasizing higher-scoring items.
+Relationship to Overall Project & Logic Flow:
+The AttentionController is a pivotal component in Step 2 of the AgentController's 12-step cognitive cycle.
+Inputs (from AgentController):
+candidates: A dictionary of information items eligible for attention, gathered by AgentController._oscar_gather_attention_candidates. These items can include percepts, active goals, memory cues, and predictions.
+current_cycle_active_goal_id: The ID of the currently prioritized goal, used for top-down relevance.
+last_gwm_content_for_novelty: The content hashes from the GlobalWorkspaceManager's previous cycle, used to update the novelty detection buffer.
+last_prediction_error: The last_prediction_error dictionary from the PredictiveWorldModel (via AgentController.last_prediction_error_for_attention), used to calculate surprise scores.
+Output (to AgentController):
+{"attention_weights": Dict[str, float]}: A dictionary mapping candidate item IDs to their final normalized attention weights.
+Downstream Consumers:
+The GlobalWorkspaceManager (Step 3) uses these attention_weights (along with all_candidates_data) to select which items enter the global workspace.
+Interactions with Other Components (Indirectly, via data passed by AgentController):
+PredictiveWorldModel: Consumes its last_prediction_error to fuel the surprise heuristic, creating a feedback loop.
+GlobalWorkspaceManager: Consumes its previous output (last_gwm_content_for_novelty) to inform novelty.
+Goal Management (within AgentController): Uses the ID of the active goal for relevance calculations.
+Current State of the Script:
+Functionality Implemented:
+Multi-factor attention calculation (recency, hint, goal relevance, novelty, surprise) is implemented.
+Softmax normalization with overflow fallback is implemented.
+Integration of novelty (based on recent workspace hashes) and surprise (based on PredictiveWorldModel error details) is functional.
+Configuration of weights and operational parameters is supported.
+Alignment with Plans: The component significantly aligns with the planned enhancements for a more sophisticated attention mechanism, particularly the inclusion of novelty and surprise, contributing to the Phase II goal of deepening core cognitive logic and establishing feedback loops.
+Known Limitations/Placeholders:
+Semantic Understanding: Goal relevance (for non-goal items) and novelty detection are based on keyword matching and string hashing, respectively. They lack deeper semantic understanding.
+Surprise Specificity: The surprise score logic is currently tailored to "outcome_mismatch" prediction errors and specific ways items relate to these errors (e.g., READ_FILE goal paths).
+No Explicit Top-Down/Bottom-Up Mixing Parameter: While factors contribute to both, a single, dynamically adjustable parameter to shift the balance between stimulus-driven and goal-driven attention (as mentioned in some plans as top_down_weight) is not explicitly used to combine separately calculated bottom-up and top-down aggregate scores in the current code. The factors are combined in a single weighted sum.
+Suggestions for Future Development/Refinement:
+Semantic Relevance and Novelty: Integrate sentence embeddings or other NLP techniques for more nuanced calculation of goal relevance and semantic novelty, rather than relying on simple keyword overlap or string hashing. This would require integration with an embedding model (potentially via external_comms).
+Generalize Surprise Heuristic: Expand the surprise score calculation to handle a wider variety of prediction error types and contexts from the PredictiveWorldModel.
+Dynamic Weight Adjustment/Priming:
+Allow MetaCognitiveMonitor or PerformanceOptimizer to dynamically adjust the contribution weights (e.g., novelty_bonus_weight, goal_relevance_weight) based on the agent's current state, task, or ConsciousState (e.g., increase novelty seeking if curiosity drive is high or if stuck).
+Implement more sophisticated priming mechanisms, perhaps based on spreading activation from currently attended items or active goals to related concepts in memory.
+Explicit Top-Down/Bottom-Up Score Aggregation: Consider calculating separate aggregate scores for bottom-up factors and top-down factors, then combining them using a top_down_bias parameter that could be dynamically adjusted.
+Inhibition of Return (IoR): Implement a mechanism to temporarily suppress attention to items recently attended to and processed (unless part of an ongoing task sequence), encouraging shifts in focus.

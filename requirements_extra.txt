@@ -1,0 +1,5 @@
+llama-cpp-python
+chromadb
+psutil
+# Add specific versions if needed
+# asyncio is built-in

@@ -1,0 +1,118 @@
+OSCAR-C Project Documentation: Affective & Motivational Core (Pain, Happiness, Purpose)
+File Path(s) Affected: Primarily agent_controller.py, models/datatypes.py (for PainSource), with influences on attention_controller.py, experience_stream.py, emergent_motivation_system.py, narrative_constructor.py. Configuration in config.toml under [internal_states].
+Purpose and Role:
+This system introduces a foundational layer of internal affective and existential states—Pain, Happiness, and Purpose—to the OSCAR-C agent. These are not intended to replicate human subjective qualia but serve as computational mechanisms to:
+Provide Internal Feedback: Evaluate the agent's operational success, failures, and long-term efficacy.
+Drive Motivation: Influence goal selection, attention, and potentially planning, biasing the agent towards actions that increase happiness and purpose while mitigating or resolving pain.
+Shape Learning and Adaptation: The affective significance of events (e.g., a painful failure) can modulate how the agent learns from them or how it prioritizes future actions.
+Enable More Complex Trade-offs: Allows the agent to navigate situations involving conflicting motivations (e.g., enduring short-term "pain" for long-term "purpose" gain, or seeking immediate "happiness" boosts that might be distractions).
+Introduce Existential Stakes: Provides ultimate failure conditions (max pain, min purpose) that drive the agent towards self-preservation and effective functioning.
+Theoretical Basis / Cognitive Inspiration:
+Affective Computing & "Hot" Cognition: Addresses the limitations of purely "cold" cognitive models by incorporating internal evaluative states that guide behavior, inspired by work from Picard (1997), Minsky (2006), and Damasio (1994) on the role of emotion in intelligence.
+Psychological Pain & Aversion (Anguish System):
+Discrepancy Theory / Unmet Expectations: Pain sources, particularly from failed high-priority goals or "missed opportunities," represent significant negative discrepancies between desired and actual states, a key trigger for negative affect (Carver & Scheier, 1990).
+Value-Weighted Impact: The intensity of pain being proportional to the value (priority) of the failed goal aligns with human experiences of regret and disappointment.
+Temporal Decay & Coping: The gradual decay of PainSource.current_intensity models psychological processes like habituation, coping, or the diminishing salience of past negative events (Frijda, 1988). Persistent, slowly decaying pain from critical failures reflects their lasting impact.
+Baseline Pain (Existential Element): The age-related baseline_pain_level introduces a low-level, persistent challenge or "existential friction," preventing complete quiescence and subtly driving continuous adaptation. It's an abstract nod to the inherent difficulties of maintaining a complex system (or "existence").
+Attentional Bias & Rumination: Active PainSource objects becoming attention candidates simulates how unresolved negative states capture cognitive resources (Nolen-Hoeksema, 1991). The pain_rumination_threshold_cycles is a control mechanism.
+Happiness & Reward (Happiness System):
+Reinforcement Learning Principles: Goal achievement increasing happiness_level acts as an internal reward signal, reinforcing successful behaviors (Sutton & Barto, 2018).
+Hedonic Adaptation: Happiness decaying towards a baseline and being negatively impacted by pain reflects concepts like the "hedonic treadmill" (Brickman & Campbell, 1971), ensuring motivation persists.
+Purpose, Efficacy & Self-Preservation (Purpose System):
+Self-Efficacy Theory: Linking purpose_level increases to learning new capabilities (from DynamicSelfModel) and achieving complex goals aligns with Bandura's (1997) work on self-efficacy fostering motivation and perseverance.
+Search for Meaning: This system provides a rudimentary drive for long-term viability and growth, echoing Frankl's (1959) emphasis on meaning and Ryff & Keyes' (1995) "purpose in life" and "personal growth" as core well-being components.
+Learned Helplessness (Converse): Persistent failure or high pain eroding purpose_level is a computational analogue to learned helplessness (Seligman, 1975), where motivation diminishes in the face of uncontrollable negative outcomes.
+Existential Thresholds: The shutdown conditions (MAX_PAIN_THRESHOLD, MIN_PURPOSE_THRESHOLD) provide ultimate consequences, driving the agent to maintain its internal states within viable ranges. This simulates a system collapse due to overwhelming internal dysfunction rather than a conscious decision.
+Implementation Details:
+Core Dataclass:
+PainSource (in models/datatypes.py): Stores details of individual "painful" events (id, description, initial_intensity, current_intensity, timestamp_created, decay_rate_per_cycle, type, is_resolved, source_goal_id).
+AgentController State Variables:
+agent_age_cycles: Increments each cycle.
+baseline_pain_level: Calculated from agent_age_cycles and config factors.
+active_pain_sources: A List[PainSource] holding current unresolved (or recently resolved but still decaying) pain events.
+current_total_pain_level: baseline_pain_level + sum(ps.current_intensity for ps in active_pain_sources if not ps.is_resolved).
+happiness_level: Updated by goal achievements, impacted by current_total_pain_level, decays to baseline.
+purpose_level: Updated by DSM capability gains and complex goal achievements, decays slowly.
+Various configuration attributes (e.g., _max_pain_shutdown_threshold, _acute_pain_goal_fail_priority_scale_factor) loaded from config.toml [internal_states] and [attention_controller].
+Key Logic Blocks in AgentController:
+_update_internal_affective_state_upkeep() (New method, called early in _run_agent_loop):
+Increments agent_age_cycles.
+Recalculates baseline_pain_level.
+Iterates active_pain_sources:
+Applies decay to current_intensity of each unresolved PainSource.
+Removes PainSources if current_intensity drops below _pain_event_min_intensity_to_retain.
+Recalculates current_total_pain_level.
+Applies decay to happiness_level towards _happiness_baseline_target.
+Applies decay to purpose_level (if _purpose_decay_rate_per_cycle > 0).
+Clamps all levels to their respective min/max (0-10 for H/P, 0-_max_pain_shutdown_threshold for Pain).
+Pain Source Generation (in _run_agent_loop - Step 10, Goal Status Update):
+When a Goal is confirmed FAILED:
+Determines if it's a "Missed Opportunity" (e.g., past time_limit, or high-priority non-default goal).
+If yes, and no existing unresolved PainSource for this goal.id exists:
+Creates a new PainSource object. initial_intensity is scaled by goal.priority and _acute_pain_goal_fail_priority_scale_factor, capped by _pain_event_max_initial_intensity.
+Adds to agent.active_pain_sources.
+Immediately updates agent.pain_level.
+Happiness Update (in _run_agent_loop - Step 10, Goal Status Update):
+When a Goal is ACHIEVED:
+happiness_level increases (scaled by goal.priority and _happiness_from_goal_priority_scale_factor, with bonus for important non-default goals).
+Pain Resolution: If the achieved goal.id matches source_goal_id of an active, unresolved PainSource:
+The PainSource is marked is_resolved = True.
+Its current_intensity is significantly reduced (e.g., by 90%).
+An additional happiness bonus is awarded (proportional to the pain intensity reduced).
+agent.pain_level is immediately recalculated.
+After processing goal events for the cycle, happiness_level is reduced by self.pain_level * self._pain_impact_on_happiness_scale_factor.
+Clamping of happiness occurs (partially here, finalized in upkeep).
+Purpose Update (in _run_agent_loop - Step 10, after DSM):
+If DynamicSelfModel reports an increase in num_capabilities since the last cycle: purpose_level increases (scaled by _purpose_from_capability_gain_factor).
+If a high-priority goal (priority >= _complex_goal_priority_threshold) was ACHIEVED: purpose_level increases (by _purpose_from_high_priority_goal_factor).
+Clamping of purpose occurs (partially here, finalized in upkeep).
+Shutdown Checks (End of _run_agent_loop cycle):
+if self.pain_level >= self._max_pain_shutdown_threshold OR self.purpose_level <= self._min_purpose_shutdown_threshold:
+Log critical reason.
+Attempt to create a final narrative entry reflecting the shutdown cause.
+Call self.stop() to initiate graceful agent shutdown.
+Integration with Other Components:
+AgentController._oscar_get_cognitive_state(): Now includes pain_level, happiness_level, purpose_level, agent_age_cycles.
+AgentController._oscar_gather_attention_candidates(): Adds active, unresolved PainSource objects as attention candidates, with weight_hint proportional to ps.current_intensity * _pain_attention_distraction_factor. (Basic rumination avoidance planned).
+ExperienceStream.integrate_experience(): Modulates PhenomenalState.valence based on controller.pain_level (negative impact) and controller.happiness_level (deviation from baseline impacts valence).
+EmergentMotivationSystem.evaluate_intrinsic_motivation(): Receives pain, happiness, purpose via cognitive_state. Uses these to adjust drives (e.g., high pain/low purpose boosts curiosity; pain reduces satisfaction; low purpose boosts competence).
+NarrativeConstructor._is_significant() & generate_narrative_entry(): Significant changes in pain, happiness, or purpose, or new/resolved pain sources, become triggers. LLM prompt for generation now includes current P/H/P levels.
+Algorithms Used (Conceptual):
+Accumulation & Decay: Pain, happiness, and purpose levels are accumulators that also experience decay or drift towards baselines. Specific pain events also decay individually.
+Thresholding: Used for triggering pain events (missed opportunity criteria), significance for narrative entries, and existential shutdown conditions.
+Scaled Response: The impact of events (goal success/failure) on pain/happiness/purpose is often scaled by the priority/importance of the event.
+Feedback Loops (Implicit & Explicit):
+Pain impacts happiness, attention, and valence.
+Happiness impacts satisfaction and valence.
+Purpose impacts curiosity and competence.
+Agent actions (leading to success/failure/learning) feed back into these core affective states.
+Relationship to Overall Project & Logic Flow:
+This system is deeply integrated into the AgentController's main cycle and affects multiple cognitive components:
+Input: Goal outcomes, DSM status.
+Internal Processing: Managed by AgentController's upkeep and model update steps.
+Output/Influence: Modifies PhenomenalState.valence (via ExperienceStream), attention candidates, drive levels (via EMS), narrative content, and can ultimately trigger agent shutdown. It provides a pervasive affective "tone" and motivational bias to the agent's operations.
+Current State of the Implementation (as of completing Iteration A.9):
+All foundational data structures (PainSource), agent attributes, and configuration parameters are in place.
+The core logic for aging, baseline pain, acute pain generation from missed opportunity goal failures, and individual pain event decay is implemented in AgentController.
+Happiness updates (gain from goal success, loss from pain, decay to baseline, bonus from pain resolution) are implemented.
+Purpose updates (gain from DSM capability learning, gain from complex goal achievement, decay) are implemented.
+Pain/Happiness now influence PhenomenalState.valence via ExperienceStream.
+Pain sources are now attention candidates via _oscar_gather_attention_candidates.
+Pain/Happiness/Purpose levels influence drives via EmergentMotivationSystem.
+Pain/Happiness/Purpose levels and pain events trigger/influence narrative entries via NarrativeConstructor.
+Existential shutdown conditions based on max pain or min purpose are implemented.
+All implemented aspects have associated passing integration tests.
+Known Limitations/Placeholders (for this Phase A implementation):
+"Missed Opportunity" Definition: Currently simple (time limit or high-priority non-default goal). More nuanced detection of irreversible failures could be added.
+Pain Resolution: Currently tied to achieving a goal with the same ID as the PainSource.source_goal_id. More flexible resolution conditions (e.g., achieving a related goal, or specific "atonement" tasks) are future work.
+Rumination Avoidance: Basic framework in place for _pain_rumination_threshold_cycles, but the mechanism to track how often a pain event has been in the Global Workspace to enforce suppression needs full implementation in Attention/GWM.
+Humor/Advanced Coping: The link to humor or advanced coping strategies (e.g., actively generating "distraction" goals) is conceptual and not yet implemented.
+Direct Behavioral Change from Pain: While pain influences attention and drives, it doesn't yet directly force specific avoidance behaviors or selection of "pain-dulling" tasks beyond what EMS might indirectly cause.
+Suggestions for Future Development/Refinement (Beyond Phase A):
+Phase B: Advanced Coping & Goal Selection based on P/H/P:
+Define specific "pain-dulling" or "happiness-boosting" task types/methods for HTN.
+Allow ValueSystem (Phase III) to evaluate actions/goals based on their predicted impact on P/H/P.
+Bias HTNPlanner or Action Selection to choose tasks that manage P/H/P when these states are extreme.
+Implement full rumination avoidance for pain events in attention.
+Refine PainSource Resolution: Allow resolution via means other than re-achieving the exact same goal ID (e.g., achieving a sub-goal, specific "apology" or "correction" actions).
+Learning Pain Associations: PredictiveWorldModel could learn to associate certain states or actions with subsequent increases in pain, leading to anticipatory avoidance.

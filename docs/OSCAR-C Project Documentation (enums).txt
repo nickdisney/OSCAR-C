@@ -1,0 +1,57 @@
+OSCAR-C Project Documentation: models/enums.py
+File Path: models/enums.py
+Purpose and Role:
+This script defines core enumerations (enums) used throughout the OSCAR-C (Optimal Self-Conscious Architecture for Reasoning) system. Enumerations provide a way to create symbolic names for a set of related, discrete constant values, enhancing code readability, maintainability, and type safety by preventing the use of arbitrary or misspelled string/integer literals for representing specific states or categories.
+Theoretical Basis / Cognitive Inspiration:
+While enums themselves are a programming construct, their application in OSCAR-C supports modeling distinct qualitative states that are recognized in cognitive science and AI:
+ConsciousState: The concept of varying levels or states of consciousness is fundamental to many cognitive theories. For instance, theories of access consciousness and phenomenal consciousness differentiate between information merely being processed and information being subjectively experienced (Block, 1995). Architectures inspired by Global Workspace Theory (GWT) often imply different processing regimes based on whether information has reached the global workspace (Baars, 1988; Dehaene & Naccache, 2001). The levels defined (e.g., UNCONSCIOUS, PRE_CONSCIOUS, CONSCIOUS, META_CONSCIOUS, REFLECTIVE) allow the system to represent a spectrum of processing depth and self-awareness, with META_CONSCIOUS and REFLECTIVE hinting at higher-order cognitive processes like self-monitoring and introspection (Flavell, 1979; Anderson & Perlis, 2005).
+GoalStatus: Goal-directed behavior is a hallmark of intelligent systems. Representing the lifecycle of a goal (e.g., from ACTIVE through PLANNING to ACHIEVED or FAILED) is crucial for managing tasks and plans, a core feature of planning systems like those based on HTN (Ghallab, Nau, & Traverso, 2004).
+RecoveryMode: Complex autonomous systems require mechanisms for error handling and recovery. Defining distinct recovery modes allows for a structured response to system anomalies, promoting robustness and resilience.
+Implementation Details:
+The script uses Python's standard enum.Enum class to define the enumerations.
+ConsciousState(Enum):
+Defines five distinct states representing levels of agent awareness or processing depth:
+UNCONSCIOUS = 0
+PRE_CONSCIOUS = 1
+CONSCIOUS = 2
+META_CONSCIOUS = 3
+REFLECTIVE = 4
+These are integer-backed, allowing for potential ordinal comparisons (though direct comparison logic would reside in components using them).
+GoalStatus(Enum):
+Defines five states representing the lifecycle stages of a goal:
+ACTIVE = "active"
+PLANNING = "planning"
+ACHIEVED = "achieved"
+FAILED = "failed"
+SUSPENDED = "suspended"
+These are string-backed, which can enhance readability in logs or configurations.
+RecoveryMode(Enum):
+Defines four modes for system error recovery:
+SOFT_RESET = "soft_reset"
+MEDIUM_RESET = "medium_reset"
+HARD_RESET = "hard_reset"
+SAFE_MODE = "safe_mode"
+These are string-backed.
+Algorithms Used:
+Not applicable (this script defines data types, not algorithms).
+Relationship to Overall Project & Logic Flow:
+These enumerations are imported and used extensively by various components and the AgentController to:
+ConsciousState:
+Assigned by the ConsciousnessLevelAssessor based on its evaluation of the agent's current phenomenal state.
+Read by the AgentController to potentially modulate its cognitive cycle or trigger specific behaviors in other components (e.g., deeper analysis by MetaCognitiveMonitor if META_CONSCIOUS).
+Used by the NarrativeConstructor to color or influence the tone/content of narrative entries.
+GoalStatus:
+Associated with Goal objects (defined in models/datatypes.py).
+Managed and updated by the AgentController during goal selection, planning, and execution.
+Consulted by the HTNPlanner to understand the current state of goals it might be planning for.
+Potentially analyzed by the MetaCognitiveMonitor to detect issues like goal stagnation.
+RecoveryMode:
+Suggested by the PerformanceOptimizer or ErrorRecoverySystem when system anomalies or critical errors are detected.
+Interpreted by the AgentController's _oscar_handle_recovery method to take appropriate corrective actions (e.g., clearing caches, resetting component states).
+The use of these enums ensures that state transitions and categorizations are consistent and less prone to errors than using raw strings or integers directly in the logic of multiple components.
+Current State of the Script:
+Functionality Implemented: The script fully defines the three core enumerations as described.
+Alignment with Plans: Provides the necessary standardized states for the cognitive architecture. The states themselves (e.g., REFLECTIVE in ConsciousState) reflect the planned scope and ambition of the OSCAR-C project.
+Known Limitations/Placeholders: None for this script itself; it is a complete definition of these enums. The functional impact of these enum values is realized in the components that use them.
+Suggestions for Future Development/Refinement:
+No immediate refinements are needed for this script itself. Future changes would likely involve adding new states to these enums or defining new enums as the agent's capabilities expand (e.g., an EmotionState enum if a more complex emotion model is implemented).
